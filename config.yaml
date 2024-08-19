@@ -1,0 +1,11 @@
+inf_free: true
+model_name_or_path: opensearch-project/opensearch-neural-sparse-encoding-doc-v2-distill
+idf_path: idf.json
+max_seq_length: 512
+train_file: null
+beir_dir: data/beir
+beir_datasets: nfcorpus
+output_dir: output
+per_device_eval_batch_size: 100
+log_level: info
+log_level_replica: info
