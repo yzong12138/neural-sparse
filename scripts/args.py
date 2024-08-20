@@ -1,5 +1,9 @@
+import sys
+import os
+
 from dataclasses import dataclass, field, asdict
 from typing import Optional
+from transformers import HfArgumentParser, TrainingArguments
 
 beir_datasets = "trec-covid,nfcorpus,nq,hotpotqa,fiqa,arguana,webis-touche2020,dbpedia-entity,scidocs,fever,climate-fever,scifact,quora"
 
@@ -11,6 +15,9 @@ class DataTrainingArguments:
     beir_dir: str = field(default="data/beir")
     # dataset name split by comma
     beir_datasets: str = field(default="nfcorpus,trec-covid")
+    training_mode: str = field(default="kd-marco")
+    kd_marco_score_dic: str = field(default="data/msmarco_mixed_scores_v2.json")
+    kd_sample_num: int = field(default=2)
 
     def __post_init__(self):
         return
@@ -27,3 +34,21 @@ class ModelArguments:
         if self.tokenizer_name is None:
             self.tokenizer_name = self.model_name_or_path
         return
+
+
+def parse_args():
+    parser = HfArgumentParser(
+        (ModelArguments, DataTrainingArguments, TrainingArguments)
+    )
+    if len(sys.argv) == 2 and sys.argv[1].endswith(".yaml"):
+        # If we pass only one argument to the script and it's the path to a json file,
+        # let's parse it to get our arguments.
+        model_args, data_args, training_args = parser.parse_yaml_file(
+            yaml_file=os.path.abspath(sys.argv[1])
+        )
+    else:
+        model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+
+    os.makedirs(training_args.output_dir, exist_ok=True)
+
+    return model_args, data_args, training_args

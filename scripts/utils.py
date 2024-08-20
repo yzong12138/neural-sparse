@@ -3,12 +3,15 @@ import asyncio
 import aiohttp
 from aiohttp import ClientTimeout
 import json
+import logging
+import sys
 
 import torch.distributed as dist
 import torch.nn as nn
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 from opensearchpy import OpenSearch
+from .model.sparse_encoders import SparseModel
 
 
 def is_ddp_enabled():
@@ -21,6 +24,30 @@ def get_os_client():
     return OpenSearch(
         hosts=["http://localhost:9200"], verify_certs=False, ssl_show_warn=False
     )
+
+
+def set_logging(training_args, log_file_name):
+    logging.basicConfig(
+        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+        datefmt="%m/%d/%Y %H:%M:%S",
+        handlers=[
+            logging.StreamHandler(sys.stdout),
+            logging.FileHandler(os.path.join(training_args.output_dir, log_file_name)),
+        ],
+    )
+
+
+def get_model(model_args):
+    idf = None
+    if model_args.inf_free and model_args.idf_path:
+        with open(model_args.idf_path) as f:
+            idf = json.load(f)
+
+    model = SparseModel(
+        model_args.model_name_or_path, idf=idf, tokenizer_id=model_args.tokenizer_name
+    )
+
+    return model
 
 
 async def do_search(session, endpoint, query_body, post_process=None):

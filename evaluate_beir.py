@@ -22,8 +22,8 @@ from scripts.model.sparse_encoders import (
 from scripts.data.dataset import BEIRCorpusDataset, KeyValueDataset
 from scripts.ingest import ingest
 from scripts.search import search
-from scripts.utils import get_os_client, batch_search
-from scripts.args import ModelArguments, DataTrainingArguments
+from scripts.utils import get_os_client, batch_search, set_logging, get_model
+from scripts.args import ModelArguments, DataTrainingArguments, parse_args
 
 import transformers
 from transformers import (
@@ -51,23 +51,8 @@ from beir.retrieval.evaluation import EvaluateRetrieval
 logger = logging.getLogger(__name__)
 
 
-def evaluate_dataset(dataset):
-    pass
-
-
 def main():
-    # 1. parse args
-    parser = HfArgumentParser(
-        (ModelArguments, DataTrainingArguments, TrainingArguments)
-    )
-    if len(sys.argv) == 2 and sys.argv[1].endswith(".yaml"):
-        # If we pass only one argument to the script and it's the path to a json file,
-        # let's parse it to get our arguments.
-        model_args, data_args, training_args = parser.parse_yaml_file(
-            yaml_file=os.path.abspath(sys.argv[1])
-        )
-    else:
-        model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+    model_args, data_args, training_args = parse_args()
 
     args_dict = {
         "model_args": asdict(model_args),
@@ -75,38 +60,20 @@ def main():
         "training_args": asdict(training_args),
     }
     beir_eval_dir = os.path.join(training_args.output_dir, "beir_eval")
-    # Export to YAML
-    os.makedirs(training_args.output_dir, exist_ok=True)
     os.makedirs(beir_eval_dir, exist_ok=True)
     with open(
         os.path.join(training_args.output_dir, "beir_eval", "config.yaml"), "w"
     ) as file:
         yaml.dump(args_dict, file, sort_keys=False)
 
-    # 2. set logs
-    logging.basicConfig(
-        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
-        datefmt="%m/%d/%Y %H:%M:%S",
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler(
-                os.path.join(training_args.output_dir, "eval_beir.log")
-            ),
-        ],
-    )
-
+    set_logging(training_args, "eval_beir.log")
     log_level = training_args.get_process_log_level()
     logger.setLevel(log_level)
+    set_seed(training_args.seed)
+
+    model = get_model(model_args)
 
     accelerator = Accelerator(mixed_precision="fp16")
-    idf = None
-    if model_args.inf_free and model_args.idf_path:
-        with open(model_args.idf_path) as f:
-            idf = json.load(f)
-
-    model = SparseModel(
-        model_args.model_name_or_path, idf=idf, tokenizer_id=model_args.tokenizer_name
-    )
     accelerator.wait_for_everyone()
 
     datasets = data_args.beir_datasets.split(",")
