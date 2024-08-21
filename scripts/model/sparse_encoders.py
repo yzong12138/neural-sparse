@@ -26,8 +26,14 @@ class SparseModel(torch.nn.Module):
             torch.tensor(idf_vector), requires_grad=False
         )
 
-    def forward(self, **kwargs):
+    def forward(self, inf_free=False, **kwargs):
         # input kwargs is the features from tokenizer
+        if inf_free:
+            return self._encode_inf_free(**kwargs)
+        else:
+            return self._encode(**kwargs)
+
+    def _encode(self, **kwargs):
         output = self.backbone(**kwargs)[0]
         values, _ = torch.max(
             output * kwargs.get("attention_mask").unsqueeze(-1), dim=1
@@ -36,10 +42,7 @@ class SparseModel(torch.nn.Module):
         values[:, self.special_token_ids] = 0
         return values
 
-    def encode(self, **kwargs):
-        return self.forward(**kwargs)
-
-    def encode_inf_free(self, **kwargs):
+    def _encode_inf_free(self, **kwargs):
         input_ids = kwargs.get("input_ids")
         batch_size = input_ids.shape[0]
         out = torch.zeros(
@@ -100,11 +103,8 @@ class SparseEncoder:
             max_length=self.max_length,
         )
         features = {k: v.to(self.device) for k, v in features.items()}
-        if inf_free:
-            output = self.model.encode_inf_free(**features)
-        else:
-            with torch.no_grad():
-                output = self.model(**features)
+        with torch.no_grad():
+            output = self.model(inf_free=inf_free, **features)
         if self.do_count:
             self.count_tensor += (output > 0).long().sum(dim=0)
         output = self.post_processor(output)

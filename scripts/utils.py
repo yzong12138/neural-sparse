@@ -28,6 +28,7 @@ def get_os_client():
 
 def set_logging(training_args, log_file_name):
     logging.basicConfig(
+        level=training_args.get_process_log_level(),
         format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
         datefmt="%m/%d/%Y %H:%M:%S",
         handlers=[

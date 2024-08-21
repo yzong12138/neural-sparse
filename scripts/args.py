@@ -18,6 +18,12 @@ class DataTrainingArguments:
     training_mode: str = field(default="kd-marco")
     kd_marco_score_dic: str = field(default="data/msmarco_mixed_scores_v2.json")
     kd_sample_num: int = field(default=2)
+    use_in_batch_negatives: bool = field(default=False)
+    flops_d_lambda: float = field(default=1e-3)
+    flops_d_T: float = field(default=10000)
+    flops_q_lambda: float = field(default=None)
+    flops_q_T: float = field(default=None)
+    ranking_loss_weight: float = field(default=1)
 
     def __post_init__(self):
         return

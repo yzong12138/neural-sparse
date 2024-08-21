@@ -67,8 +67,6 @@ def main():
         yaml.dump(args_dict, file, sort_keys=False)
 
     set_logging(training_args, "eval_beir.log")
-    log_level = training_args.get_process_log_level()
-    logger.setLevel(log_level)
     set_seed(training_args.seed)
 
     model = get_model(model_args)
@@ -105,8 +103,7 @@ def main():
                 index_name=dataset,
                 accelerator=accelerator,
                 max_length=data_args.max_seq_length,
-                batch_size=training_args.per_device_eval_batch_size,
-                log_level=log_level,
+                batch_size=training_args.per_device_eval_batch_size
             )
         )
 
@@ -119,8 +116,7 @@ def main():
                     out_dir=beir_eval_dir,
                     index_name=dataset,
                     max_length=data_args.max_seq_length,
-                    batch_size=training_args.per_device_eval_batch_size,
-                    log_level=log_level,
+                    batch_size=training_args.per_device_eval_batch_size
                 )
             )
 

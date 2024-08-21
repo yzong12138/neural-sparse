@@ -25,9 +25,7 @@ async def search(
     index_name: str,
     max_length: int = 512,
     batch_size: int = 50,
-    log_level: int = 20,
 ):
-    logger.setLevel(log_level)
     device = model.backbone.device
     os.makedirs(out_dir, exist_ok=True)
 

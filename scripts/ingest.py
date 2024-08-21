@@ -33,9 +33,7 @@ async def ingest(
     accelerator: Accelerator,
     max_length: int = 512,
     batch_size: int = 50,
-    log_level: int = 20,
 ):
-    logger.setLevel(log_level)
     os_client = get_os_client()
     os.makedirs(out_dir, exist_ok=True)
     # prepare DDP dataset and model

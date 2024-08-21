@@ -72,7 +72,6 @@ class KnowledgeDistillDataset(Dataset):
             data: A list of dictionary which have "query", "docs" and "scores" list.
                 An example: {"query":"hi","docs":["hello","hi"],"scores":[0.99,1]}
         """
-        print(__name__)
         self.logger = logging.getLogger(__name__)
         # self.logger.setLevel(20)
         self.data = []
@@ -88,6 +87,8 @@ class KnowledgeDistillDataset(Dataset):
             idxs = list(range(len(scores)))
             random.shuffle(idxs)
             for i in range(0, len(scores), sample_num):
+                # we need to make sure all samples have same negative number
+                # to split all documents and perform matmul
                 if len(scores) - i < sample_num:
                     break
                 sample_idxs = idxs[i : i + sample_num]
