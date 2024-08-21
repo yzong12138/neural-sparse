@@ -41,20 +41,19 @@ logger = logging.getLogger(__name__)
 
 def main():
     model_args, data_args, training_args = parse_args()
+    os.makedirs(training_args.output_dir, exist_ok=True)
     if len(sys.argv) == 2 and sys.argv[1].endswith(".yaml"):
         os.system(
-            f"""cp {sys.argv[1]} {os.path.join(training_args, "train_config.yaml")}"""
+            f"""cp {sys.argv[1]} {os.path.join(training_args.output_dir, "train_config.yaml")}"""
         )
-
-    args_dict = {
-        "model_args": asdict(model_args),
-        "data_args": asdict(data_args),
-        "training_args": asdict(training_args),
-    }
-
-    os.makedirs(training_args.output_dir, exist_ok=True)
-    with open(os.path.join(training_args.output_dir, "config.yaml"), "w") as file:
-        yaml.dump(args_dict, file, sort_keys=False)
+    else:
+        args_dict = {
+            "model_args": asdict(model_args),
+            "data_args": asdict(data_args),
+            "training_args": asdict(training_args),
+        }
+        with open(os.path.join(training_args.output_dir, "config.yaml"), "w") as file:
+            yaml.dump(args_dict, file, sort_keys=False)
 
     set_logging(training_args, "train.log")
     set_seed(training_args.seed)

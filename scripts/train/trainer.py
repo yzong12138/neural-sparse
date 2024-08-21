@@ -117,11 +117,11 @@ class SparseModelTrainer(Trainer):
         os.makedirs(output_dir, exist_ok=True)
         logger.info(f"Saving model checkpoint to {output_dir}")
 
-        if self.accelerator.is_main_process():
+        if self.accelerator.is_main_process:
             self.accelerator.unwrap_model(self.model).save(
                 output_dir,
                 state_dict=state_dict,
                 safe_serialization=self.args.save_safetensors,
             )
 
-        self.accelerator.wait_for_everyone()
+        # self.accelerator.wait_for_everyone()
