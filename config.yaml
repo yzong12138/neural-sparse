@@ -1,11 +1,36 @@
+# logging_steps: 5
+# log_level_replica: info
+
 inf_free: true
-model_name_or_path: opensearch-project/opensearch-neural-sparse-encoding-doc-v2-distill
+model_name_or_path: models/co-pt
+tokenizer_name: models/co-pt
 idf_path: idf.json
-max_seq_length: 512
-train_file: null
+
+max_seq_length: 256
 beir_dir: data/beir
-beir_datasets: nfcorpus
-output_dir: output
-per_device_eval_batch_size: 100
+beir_datasets: nfcorpus, trec-covid
+training_mode: kd-marco
+kd_marco_score_dic: data/msmarco_mixed_scores_v3.json
+kd_sample_num: 10
+use_in_batch_negatives: false
+flops_d_lambda: 0.02
+flops_d_T: 10000
+ranking_loss_weight: 0.9
+
+output_dir: output/ddp_test
+per_device_eval_batch_size: 50
+per_device_train_batch_size: 5
+
 log_level: info
-log_level_replica: info
+max_steps: 50000
+flops_d_lambda: 0.01
+flops_d_T: 0
+
+
+fp16: true
+learning_rate: 0.00002
+weight_decay: 0.01
+lr_scheduler_type: linear
+warmup_steps: 6000
+save_strategy: steps
+save_steps: 10000

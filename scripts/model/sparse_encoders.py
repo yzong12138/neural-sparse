@@ -2,6 +2,9 @@ import torch
 import torch.nn.functional as F
 import transformers
 import itertools
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class SparseModel(torch.nn.Module):
@@ -19,6 +22,7 @@ class SparseModel(torch.nn.Module):
 
         idf_vector = [1] * self.tokenizer.vocab_size
         if idf is not None:
+            logger.info("set idf to the model")
             for token, weight in idf.items():
                 _id = self.tokenizer._convert_token_to_id_with_added_voc(token)
                 idf_vector[_id] = weight

@@ -103,7 +103,7 @@ def main():
                 index_name=dataset,
                 accelerator=accelerator,
                 max_length=data_args.max_seq_length,
-                batch_size=training_args.per_device_eval_batch_size
+                batch_size=training_args.per_device_eval_batch_size,
             )
         )
 
@@ -116,7 +116,7 @@ def main():
                     out_dir=beir_eval_dir,
                     index_name=dataset,
                     max_length=data_args.max_seq_length,
-                    batch_size=training_args.per_device_eval_batch_size
+                    batch_size=training_args.per_device_eval_batch_size,
                 )
             )
 

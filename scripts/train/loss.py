@@ -4,7 +4,11 @@ import torch
 class FLOPS:
     @staticmethod
     def flops_value(representation):
-        # size: batch_size * seq_length * vocab_dim
+        # representation size: batch_size * vocab_dim
+        # all_representation size: n * batch_size * vocab_dim
+        # we need to take the representations from other devices into calculation
+        # but detach their grad. We only consider the grad for representation at local device
+        # note representation is one element of all_representations
         return torch.sum(torch.mean(torch.abs(representation), dim=0) ** 2)
 
     def get_lambda(lambda_value, lambda_T, step):

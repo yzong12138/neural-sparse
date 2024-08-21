@@ -2,31 +2,36 @@ import os
 import logging
 import torch
 
-from .loss import FLOPS
 from ..model.sparse_encoders import SparseModel
 
 from transformers import Trainer
 
 logger = logging.getLogger(__name__)
 
+
 class ModelWrapper(torch.nn.Module):
     def __init__(self, sparse_model, inf_free=True):
         super().__init__()
         self.sparse_model = sparse_model
         self.inf_free = inf_free
-        
+
     def forward(self, inputs):
-        d_rep = self.sparse_model(inf_free=False, **inputs["docs"])
-        q_rep = self.sparse_model(inf_free=self.inf_free, **inputs["query"])
-        return d_rep, q_rep
-    
-    def save(self, output_dir, **kwargs):
-        self.sparse_model.backbone.save_pretrained(
-            output_dir,
-            **kwargs
+        d_rep = self.sparse_model(
+            inf_free=False,
+            input_ids=inputs["input_ids"],
+            attention_mask=inputs["attention_mask"],
         )
+        q_rep = self.sparse_model(
+            inf_free=self.inf_free,
+            input_ids=inputs["q_input_ids"],
+            attention_mask=inputs["q_attention_mask"],
+        )
+        return d_rep, q_rep
+
+    def save(self, output_dir, **kwargs):
+        self.sparse_model.backbone.save_pretrained(output_dir, **kwargs)
         self.sparse_model.tokenizer.save_pretrained(output_dir)
-        
+
 
 class SparseModelTrainer(Trainer):
     def __init__(self, model_args, data_args, loss_functions, **kwargs):
@@ -36,21 +41,55 @@ class SparseModelTrainer(Trainer):
         kwargs["model"] = ModelWrapper(kwargs["model"])
         super().__init__(**kwargs)
 
+    def flops_value(self, representation):
+        # representation size: batch_size * vocab_dim
+        # if ddp: all_representation size: n * batch_size * vocab_dim
+        # we need to take the representations from other devices into calculation
+        # but detach their grad. We only consider the grad for representation at local device
+        # note representation is one element of all_representations
+        if self.accelerator.num_processes > 1:
+            all_representation = self.accelerator.gather(representation).reshape(
+                -1, representation.shape[-1]
+            )
+            all_representation_mean = torch.mean(torch.abs(all_representation), dim=0)
+            # return torch.sum(all_representation_mean ** 2)
+            representation_mean = torch.mean(torch.abs(representation), dim=0)
+            base = (
+                self.accelerator.num_processes * all_representation_mean
+            ) - representation_mean
+            base = base.detach().clone()
+            # logger.info(f"{representation_mean.sum()}   {all_representation_mean.sum()}")
+            return torch.sum(
+                ((representation_mean + base) / self.accelerator.num_processes) ** 2
+            )
+        else:
+            return torch.sum(torch.mean(torch.abs(representation), dim=0) ** 2)
+
+    def get_lambda(self, lambda_value, lambda_T):
+        if self.state.global_step >= lambda_T:
+            return lambda_value
+        return lambda_value * (self.state.global_step / lambda_T) ** 2
+
     def compute_loss(self, model: SparseModel, inputs, return_outputs=False):
         flops_loss = 0
 
-        d_rep, q_rep = model(inputs)
-        flops_loss += FLOPS.flops_value(d_rep) * FLOPS.get_lambda(
-            self.data_args.flops_d_lambda,
-            self.data_args.flops_d_T,
-            self.state.global_step,
+        # we construct this input and model wrapper to make it work for both data parallel and DDP
+        model_wrapper_input = {
+            "q_input_ids": inputs["query"]["input_ids"],
+            "q_attention_mask": inputs["query"]["attention_mask"],
+            "input_ids": inputs["docs"]["input_ids"],
+            "attention_mask": inputs["docs"]["attention_mask"],
+        }
+
+        d_rep, q_rep = model(model_wrapper_input)
+        d_flops = self.flops_value(d_rep)
+        flops_loss += d_flops * self.get_lambda(
+            self.data_args.flops_d_lambda, self.data_args.flops_d_T
         )
-        
+
         if not self.model_args.inf_free:
-            flops_loss += FLOPS.flops_value(q_rep) * FLOPS.get_lambda(
-                self.data_args.flops_q_lambda,
-                self.data_args.flops_q_T,
-                self.state.global_step,
+            flops_loss += self.flops_value(q_rep) * self.get_lambda(
+                self.data_args.flops_q_lambda, self.data_args.flops_q_T
             )
 
         ranking_loss = 0
@@ -65,9 +104,10 @@ class SparseModelTrainer(Trainer):
             "d_rep": d_rep,
         }
 
-        logger.info(
-            f"input_shape:{q_rep.shape, d_rep.shape} ranking loss:{ranking_loss}, flops_loss:{flops_loss}"
-        )
+        if self.state.global_step % self.args.logging_steps == 0:
+            logger.info(
+                f"ranking loss:{ranking_loss}, d_flops: {d_flops}, avg doc length: {(d_rep>0).sum()/d_rep.shape[0]}"
+            )
 
         return (loss, outputs) if return_outputs else loss
 
@@ -77,8 +117,11 @@ class SparseModelTrainer(Trainer):
         os.makedirs(output_dir, exist_ok=True)
         logger.info(f"Saving model checkpoint to {output_dir}")
 
-        self.accelerator.unwrap_model(self.model).save(
-            output_dir,
-            state_dict=state_dict,
-            safe_serialization=self.args.save_safetensors,
-        )
+        if self.accelerator.is_main_process():
+            self.accelerator.unwrap_model(self.model).save(
+                output_dir,
+                state_dict=state_dict,
+                safe_serialization=self.args.save_safetensors,
+            )
+
+        self.accelerator.wait_for_everyone()
