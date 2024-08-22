@@ -8,16 +8,15 @@ idf_path: idf.json
 
 max_seq_length: 256
 beir_dir: data/beir
-beir_datasets: nfcorpus, trec-covid
 training_mode: kd-marco
 kd_marco_score_dic: data/msmarco_mixed_scores_v3.json
 kd_sample_num: 10
 use_in_batch_negatives: false
-flops_d_lambda: 0.02
+flops_d_lambda: 0.5
 flops_d_T: 10000
-ranking_loss_weight: 0.9
+ranking_loss_weight: 1
 
-output_dir: output/ddp_test
+output_dir: output/ddp_test2
 per_device_eval_batch_size: 50
 per_device_train_batch_size: 5
 
@@ -29,5 +28,5 @@ weight_decay: 0.01
 lr_scheduler_type: linear
 warmup_steps: 6000
 save_strategy: steps
-save_steps: 10000
+save_steps: 50000
 dataloader_drop_last: true

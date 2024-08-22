@@ -38,6 +38,7 @@ class SparseModelTrainer(Trainer):
         self.model_args = model_args
         self.data_args = data_args
         self.loss_functions = loss_functions
+        self.ranking_loss_moving_avg = 0
         kwargs["model"] = ModelWrapper(kwargs["model"])
         super().__init__(**kwargs)
 
@@ -97,6 +98,9 @@ class SparseModelTrainer(Trainer):
             ranking_loss += loss_function.get_loss(
                 q_rep=q_rep, d_rep=d_rep, inputs=inputs
             )
+        self.ranking_loss_moving_avg = (
+            0.01 * ranking_loss.item() + 0.99 * self.ranking_loss_moving_avg
+        )
 
         loss = ranking_loss + flops_loss
         outputs = {
@@ -106,7 +110,7 @@ class SparseModelTrainer(Trainer):
 
         if self.state.global_step % self.args.logging_steps == 0:
             logger.info(
-                f"ranking loss:{ranking_loss}, d_flops: {d_flops}, avg doc length: {(d_rep>0).sum()/d_rep.shape[0]}"
+                f"ranking loss moving avg:{self.ranking_loss_moving_avg}, d_flops: {d_flops}, avg doc length: {(d_rep>0).sum()/d_rep.shape[0]}"
             )
 
         return (loss, outputs) if return_outputs else loss

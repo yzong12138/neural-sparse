@@ -68,11 +68,15 @@ async def search(
         os.path.join(out_dir, index_name + ".corpus.bin"), map_location=device
     )
     flops = float(torch.matmul(count, count_doc).cpu())
-    logger.info(f"Index_name: {index_name}, flops: {flops}")
+    q_length = float(count.sum().cpu())
+    d_length = float(count_doc.sum().cpu())
+    logger.info(
+        f"Index_name: {index_name}, flops: {flops}, d_length:{d_length}, q_length:{q_length}"
+    )
 
     return {
         "run_res": run_res,
         "flops": flops,
-        "q_length": float(count.sum().cpu()),
-        "d_length": float(count_doc.sum().cpu()),
+        "q_length": q_length,
+        "d_length": d_length,
     }

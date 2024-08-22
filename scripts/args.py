@@ -10,11 +10,11 @@ beir_datasets = "trec-covid,nfcorpus,nq,hotpotqa,fiqa,arguana,webis-touche2020,d
 
 @dataclass
 class DataTrainingArguments:
-    max_seq_length: int = field(default=256)
+    max_seq_length: int = field(default=512)
     train_file: Optional[str] = field(default=None)
     beir_dir: str = field(default="data/beir")
     # dataset name split by comma
-    beir_datasets: str = field(default="nfcorpus,trec-covid")
+    beir_datasets: str = field(default=beir_datasets)
     training_mode: str = field(default="kd-marco")
     kd_marco_score_dic: str = field(default="data/msmarco_mixed_scores_v2.json")
     kd_sample_num: int = field(default=2)
