@@ -25,6 +25,7 @@ async def search(
     index_name: str,
     max_length: int = 512,
     batch_size: int = 50,
+    result_size: int = 15,
 ):
     device = model.backbone.device
     os.makedirs(out_dir, exist_ok=True)
@@ -48,7 +49,7 @@ async def search(
             index_name=index_name,
             endpoint_lambda=lambda index_name: f"""http://localhost:9200/{index_name}/_search""",
             get_query_lambda=lambda query: {
-                "size": 15,
+                "size": result_size,
                 "query": sparse_embedding_to_query(query),
                 "_source": ["id"],
             },

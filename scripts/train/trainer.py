@@ -52,17 +52,20 @@ class SparseModelTrainer(Trainer):
             all_representation = self.accelerator.gather(representation).reshape(
                 -1, representation.shape[-1]
             )
-            all_representation_mean = torch.mean(torch.abs(all_representation), dim=0)
-            # return torch.sum(all_representation_mean ** 2)
-            representation_mean = torch.mean(torch.abs(representation), dim=0)
-            base = (
-                self.accelerator.num_processes * all_representation_mean
-            ) - representation_mean
-            base = base.detach().clone()
-            # logger.info(f"{representation_mean.sum()}   {all_representation_mean.sum()}")
-            return torch.sum(
-                ((representation_mean + base) / self.accelerator.num_processes) ** 2
+            batch_size = representation.shape[0]
+            local_index = self.accelerator.local_process_index
+            base_representation = (
+                torch.cat(
+                    [
+                        all_representation[: local_index * batch_size],
+                        all_representation[local_index * batch_size + batch_size :],
+                    ]
+                )
+                .detach()
+                .clone()
             )
+            representation_ = torch.cat([base_representation, representation])
+            return torch.sum(torch.mean(torch.abs(representation_), dim=0) ** 2)
         else:
             return torch.sum(torch.mean(torch.abs(representation), dim=0) ** 2)
 
