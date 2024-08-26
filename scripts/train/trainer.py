@@ -50,7 +50,6 @@ class SparseModelTrainer(Trainer):
         # note representation is one element of all_representations
         # group num: how many semantic similar documents representations in one batch
         if self.accelerator.num_processes > 1:
-            logger.info(f"{self.accelerator.gather(representation).shape}")
             all_representation = self.accelerator.gather(representation)
             batch_size = representation.shape[0]
             local_index = self.accelerator.local_process_index
@@ -65,17 +64,21 @@ class SparseModelTrainer(Trainer):
                 .clone()
             )
             representation = torch.cat([base_representation, representation])
-            representation = representation.reshape(-1,group_num,representation.shape[-1])
+            representation = representation.reshape(
+                -1, group_num, representation.shape[-1]
+            )
             return torch.sum(torch.mean(torch.abs(representation), dim=0) ** 2)
         else:
-            representation = representation.reshape(-1,group_num,representation.shape[-1])
+            representation = representation.reshape(
+                -1, group_num, representation.shape[-1]
+            )
             return torch.sum(torch.mean(torch.abs(representation), dim=0) ** 2)
 
     def get_lambda(self, lambda_value, lambda_T):
         if self.state.global_step >= lambda_T:
             return lambda_value
         step = self.state.global_step + 1
-        return lambda_value * ( step / lambda_T) ** 2
+        return lambda_value * (step / lambda_T) ** 2
 
     def compute_loss(self, model: SparseModel, inputs, return_outputs=False):
         flops_loss = 0
@@ -89,7 +92,7 @@ class SparseModelTrainer(Trainer):
         }
 
         d_rep, q_rep = model(model_wrapper_input)
-        d_flops = self.flops_value(d_rep, d_rep.shape[0]//q_rep.shape[0])
+        d_flops = self.flops_value(d_rep, d_rep.shape[0] // q_rep.shape[0])
         flops_loss += d_flops * self.get_lambda(
             self.data_args.flops_d_lambda, self.data_args.flops_d_T
         )
@@ -116,7 +119,7 @@ class SparseModelTrainer(Trainer):
 
         if self.state.global_step % self.args.logging_steps == 0:
             logger.info(
-                f"ranking loss moving avg:{self.ranking_loss_moving_avg}, d_flops: {d_flops}, avg doc length: {(d_rep>0).sum()/d_rep.shape[0]}"
+                f"ranking loss moving avg:{self.ranking_loss_moving_avg}, d_flops: {d_flops}, flops_loss: {flops_loss} avg doc length: {(d_rep>0).sum()/d_rep.shape[0]}"
             )
 
         return (loss, outputs) if return_outputs else loss
@@ -135,4 +138,3 @@ class SparseModelTrainer(Trainer):
             )
 
         # self.accelerator.wait_for_everyone()
-        

@@ -83,10 +83,16 @@ def main():
         )
 
     # split to eval
-    optimizer = AdamW(model.parameters(), lr=training_args.learning_rate, weight_decay=training_args.weight_decay)
-    scheduler = get_linear_schedule_with_warmup(optimizer=optimizer,
-                                                num_warmup_steps=training_args.warmup_steps,
-                                                num_training_steps=training_args.max_steps)
+    optimizer = AdamW(
+        model.parameters(),
+        lr=training_args.learning_rate,
+        weight_decay=training_args.weight_decay,
+    )
+    scheduler = get_linear_schedule_with_warmup(
+        optimizer=optimizer,
+        num_warmup_steps=training_args.warmup_steps,
+        num_training_steps=training_args.max_steps,
+    )
 
     trainer = SparseModelTrainer(
         model_args=model_args,
@@ -96,7 +102,7 @@ def main():
         train_dataset=dataset,
         data_collator=data_collator,
         loss_functions=loss_functions,
-        optimizers=(optimizer, scheduler)
+        optimizers=(optimizer, scheduler),
     )
 
     trainer.train()
