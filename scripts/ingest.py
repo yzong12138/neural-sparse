@@ -37,11 +37,11 @@ async def ingest(
     os_client = get_os_client()
     os.makedirs(out_dir, exist_ok=True)
     # prepare DDP dataset and model
-    if not is_ddp_enabled():
-        logger.error("The ingest can only work on environment that DDP is enabled.")
-        raise RuntimeError(
-            "The ingest can only work on environment that DDP is enabled."
-        )
+    # if not is_ddp_enabled():
+    #     logger.error("The ingest can only work on environment that DDP is enabled.")
+    #     raise RuntimeError(
+    #         "The ingest can only work on environment that DDP is enabled."
+    #     )
     if isinstance(dataset, DDPDatasetWithRank):
         logger.error("Input dataset can not be DDPDatasetWithRank.")
         raise RuntimeError("Input dataset can not be DDPDatasetWithRank.")

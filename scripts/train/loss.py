@@ -1,31 +1,17 @@
 import torch
 
 
-class FLOPS:
-    @staticmethod
-    def flops_value(representation):
-        # representation size: batch_size * vocab_dim
-        # all_representation size: n * batch_size * vocab_dim
-        # we need to take the representations from other devices into calculation
-        # but detach their grad. We only consider the grad for representation at local device
-        # note representation is one element of all_representations
-        return torch.sum(torch.mean(torch.abs(representation), dim=0) ** 2)
-
-    def get_lambda(lambda_value, lambda_T, step):
-        if step >= lambda_T:
-            return lambda_value
-        return lambda_value * (step / lambda_T) ** 2
-
-
 class SparseTrainingLoss:
     def __init__(self, weight=1):
         self.weight = weight
 
-    def __call__(self, q_rep, d_rep, inputs):
+    def __call__(self, q_rep, d_rep, inputs, accelerator=None):
         raise NotImplementedError
 
-    def get_loss(self, q_rep, d_rep, inputs):
-        return self.weight * self.__call__(q_rep, d_rep, inputs)
+    def get_loss(self, q_rep, d_rep, inputs, accelerator=None):
+        return self.weight * self.__call__(
+            q_rep, d_rep, inputs, accelerator=accelerator
+        )
 
 
 class KLDivLoss(SparseTrainingLoss):
@@ -34,7 +20,7 @@ class KLDivLoss(SparseTrainingLoss):
         self.loss = torch.nn.KLDivLoss(reduction="none")
         super().__init__(weight)
 
-    def __call__(self, q_rep, d_rep, inputs):
+    def __call__(self, q_rep, d_rep, inputs, accelerator=None):
         teacher_scores = inputs["scores"]
 
         if not self.in_batch_negatives:

@@ -16,7 +16,6 @@ class DataTrainingArguments:
     # dataset name split by comma
     beir_datasets: str = field(default=beir_datasets)
     training_mode: str = field(default="kd-marco")
-    kd_marco_score_dic: str = field(default="data/msmarco_mixed_scores_v2.json")
     kd_sample_num: int = field(default=2)
     use_in_batch_negatives: bool = field(default=False)
     flops_d_lambda: float = field(default=1e-3)

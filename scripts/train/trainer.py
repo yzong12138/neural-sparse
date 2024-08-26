@@ -42,16 +42,16 @@ class SparseModelTrainer(Trainer):
         kwargs["model"] = ModelWrapper(kwargs["model"])
         super().__init__(**kwargs)
 
-    def flops_value(self, representation):
+    def flops_value(self, representation, group_num=1):
         # representation size: batch_size * vocab_dim
         # if ddp: all_representation size: n * batch_size * vocab_dim
         # we need to take the representations from other devices into calculation
         # but detach their grad. We only consider the grad for representation at local device
         # note representation is one element of all_representations
+        # group num: how many semantic similar documents representations in one batch
         if self.accelerator.num_processes > 1:
-            all_representation = self.accelerator.gather(representation).reshape(
-                -1, representation.shape[-1]
-            )
+            logger.info(f"{self.accelerator.gather(representation).shape}")
+            all_representation = self.accelerator.gather(representation)
             batch_size = representation.shape[0]
             local_index = self.accelerator.local_process_index
             base_representation = (
@@ -64,15 +64,18 @@ class SparseModelTrainer(Trainer):
                 .detach()
                 .clone()
             )
-            representation_ = torch.cat([base_representation, representation])
-            return torch.sum(torch.mean(torch.abs(representation_), dim=0) ** 2)
+            representation = torch.cat([base_representation, representation])
+            representation = representation.reshape(-1,group_num,representation.shape[-1])
+            return torch.sum(torch.mean(torch.abs(representation), dim=0) ** 2)
         else:
+            representation = representation.reshape(-1,group_num,representation.shape[-1])
             return torch.sum(torch.mean(torch.abs(representation), dim=0) ** 2)
 
     def get_lambda(self, lambda_value, lambda_T):
         if self.state.global_step >= lambda_T:
             return lambda_value
-        return lambda_value * (self.state.global_step / lambda_T) ** 2
+        step = self.state.global_step + 1
+        return lambda_value * ( step / lambda_T) ** 2
 
     def compute_loss(self, model: SparseModel, inputs, return_outputs=False):
         flops_loss = 0
@@ -86,7 +89,7 @@ class SparseModelTrainer(Trainer):
         }
 
         d_rep, q_rep = model(model_wrapper_input)
-        d_flops = self.flops_value(d_rep)
+        d_flops = self.flops_value(d_rep, d_rep.shape[0]//q_rep.shape[0])
         flops_loss += d_flops * self.get_lambda(
             self.data_args.flops_d_lambda, self.data_args.flops_d_T
         )
@@ -99,7 +102,7 @@ class SparseModelTrainer(Trainer):
         ranking_loss = 0
         for loss_function in self.loss_functions:
             ranking_loss += loss_function.get_loss(
-                q_rep=q_rep, d_rep=d_rep, inputs=inputs
+                q_rep=q_rep, d_rep=d_rep, inputs=inputs, accelerator=self.accelerator
             )
         self.ranking_loss_moving_avg = (
             0.01 * ranking_loss.item() + 0.99 * self.ranking_loss_moving_avg
@@ -132,3 +135,4 @@ class SparseModelTrainer(Trainer):
             )
 
         # self.accelerator.wait_for_everyone()
+        

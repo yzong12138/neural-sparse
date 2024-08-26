@@ -8,6 +8,8 @@ from beir import util
 from beir.datasets.data_loader import GenericDataLoader
 from torch.utils.data import Dataset
 
+logger = logging.getLogger(__name__)
+
 
 class KeyValueDataset(Dataset):
     def __init__(self, data_dict):
@@ -72,10 +74,8 @@ class KnowledgeDistillDataset(Dataset):
             data: A list of dictionary which have "query", "docs" and "scores" list.
                 An example: {"query":"hi","docs":["hello","hi"],"scores":[0.99,1]}
         """
-        self.logger = logging.getLogger(__name__)
-        # self.logger.setLevel(20)
         self.data = []
-        self.logger.info(f"KnowledgeDistillDataset input data number: {len(all_data)}")
+        logger.info(f"KnowledgeDistillDataset input data number: {len(all_data)}")
         assert sample_num >= 2
 
         for data in all_data:
@@ -99,7 +99,7 @@ class KnowledgeDistillDataset(Dataset):
                         [scores[idx] for idx in sample_idxs],
                     ]
                 )
-        self.logger.info(
+        logger.info(
             f"KnowledgeDistillDataset after process data number: {len(self.data)}"
         )
 

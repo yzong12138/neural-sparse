@@ -35,6 +35,7 @@ from transformers import (
 from transformers.trainer_utils import get_last_checkpoint
 from transformers.utils import check_min_version, send_example_telemetry
 from transformers.utils.versions import require_version
+from transformers.optimization import AdamW, get_linear_schedule_with_warmup
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ def main():
     if data_args.training_mode.startswith("kd"):
         if data_args.training_mode.split("-")[-1] == "marco":
             dataset = MsMarcoKDDataset(
-                score_dic_path=data_args.kd_marco_score_dic,
+                score_dic_path=data_args.train_file,
                 sample_num=data_args.kd_sample_num,
             )
             # with open("data/toy_kd.json") as f:
@@ -82,6 +83,10 @@ def main():
         )
 
     # split to eval
+    optimizer = AdamW(model.parameters(), lr=training_args.learning_rate, weight_decay=training_args.weight_decay)
+    scheduler = get_linear_schedule_with_warmup(optimizer=optimizer,
+                                                num_warmup_steps=training_args.warmup_steps,
+                                                num_training_steps=training_args.max_steps)
 
     trainer = SparseModelTrainer(
         model_args=model_args,
@@ -91,6 +96,7 @@ def main():
         train_dataset=dataset,
         data_collator=data_collator,
         loss_functions=loss_functions,
+        optimizers=(optimizer, scheduler)
     )
 
     trainer.train()
