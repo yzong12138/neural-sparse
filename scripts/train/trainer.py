@@ -5,6 +5,7 @@ import torch
 from ..model.sparse_encoders import SparseModel
 
 from transformers import Trainer
+from torch.utils.data import DataLoader
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ class SparseModelTrainer(Trainer):
             representation = representation.reshape(
                 -1, group_num, representation.shape[-1]
             )
-            return torch.sum(torch.mean(torch.abs(representation), dim=0) ** 2)
+            return torch.sum(torch.mean(torch.abs(representation), dim=0) ** 2)*self.accelerator.num_processes
         else:
             representation = representation.reshape(
                 -1, group_num, representation.shape[-1]
@@ -121,6 +122,12 @@ class SparseModelTrainer(Trainer):
             logger.info(
                 f"ranking loss moving avg:{self.ranking_loss_moving_avg}, d_flops: {d_flops}, flops_loss: {flops_loss} avg doc length: {(d_rep>0).sum()/d_rep.shape[0]}"
             )
+            
+        logger.info(
+                f"step :{self.state.global_step}, d rep: {self.accelerator.gather(d_rep).sum():.4f}, {self.model.sparse_model.backbone.bert.embeddings.word_embeddings.weight.sum():.4f}"
+            )
+
+        assert 0
 
         return (loss, outputs) if return_outputs else loss
 
@@ -138,3 +145,10 @@ class SparseModelTrainer(Trainer):
             )
 
         # self.accelerator.wait_for_everyone()
+
+    def get_train_dataloader(self) -> DataLoader:
+        train_dataset = self.train_dataset
+        data_collator = self.data_collator
+        
+        return self.accelerator.prepare(DataLoader(train_dataset, batch_size=self._train_batch_size, shuffle=False,
+                                                   collate_fn=data_collator))

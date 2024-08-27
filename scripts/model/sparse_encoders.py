@@ -13,7 +13,7 @@ class SparseModel(torch.nn.Module):
 
         if tokenizer_id is None:
             tokenizer_id = model_id
-        self.backbone = transformers.AutoModelForMaskedLM.from_pretrained(model_id)
+        self.backbone = transformers.AutoModelForMaskedLM.from_pretrained(model_id, attention_probs_dropout_prob=0, hidden_dropout_prob=0)
         self.tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_id)
         self.special_token_ids = [
             self.tokenizer.vocab[token]
@@ -43,7 +43,7 @@ class SparseModel(torch.nn.Module):
             output * kwargs.get("attention_mask").unsqueeze(-1), dim=1
         )
         values = torch.log(1 + torch.relu(values))
-        values[:, self.special_token_ids] = 0
+        # values[:, self.special_token_ids] = 0
         return values
 
     def _encode_inf_free(self, **kwargs):

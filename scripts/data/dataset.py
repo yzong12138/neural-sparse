@@ -85,7 +85,7 @@ class KnowledgeDistillDataset(Dataset):
             assert len(texts) == len(scores)
 
             idxs = list(range(len(scores)))
-            random.shuffle(idxs)
+            # random.shuffle(idxs)
             for i in range(0, len(scores), sample_num):
                 # we need to make sure all samples have same negative number
                 # to split all documents and perform matmul

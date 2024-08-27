@@ -64,13 +64,14 @@ def main():
 
     if data_args.training_mode.startswith("kd"):
         if data_args.training_mode.split("-")[-1] == "marco":
-            dataset = MsMarcoKDDataset(
-                score_dic_path=data_args.train_file,
-                sample_num=data_args.kd_sample_num,
-            )
-            # with open("data/toy_kd.json") as f:
-            #     data = json.load(f)
-            # dataset = KnowledgeDistillDataset(data, sample_num=data_args.kd_sample_num)
+            # dataset = MsMarcoKDDataset(
+            #     score_dic_path=data_args.train_file,
+            #     sample_num=data_args.kd_sample_num,
+            # )
+            with open("data/toy_kd.json") as f:
+                data = json.load(f)
+            dataset = KnowledgeDistillDataset(data, sample_num=data_args.kd_sample_num)
+            dataset = dataset[:16]
             loss_functions.append(
                 KLDivLoss(
                     in_batch_negatives=data_args.use_in_batch_negatives,
