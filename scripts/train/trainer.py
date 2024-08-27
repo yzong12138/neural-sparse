@@ -67,7 +67,10 @@ class SparseModelTrainer(Trainer):
             representation = representation.reshape(
                 -1, group_num, representation.shape[-1]
             )
-            return torch.sum(torch.mean(torch.abs(representation), dim=0) ** 2)
+            return (
+                torch.sum(torch.mean(torch.abs(representation), dim=0) ** 2)
+                * self.accelerator.num_processes
+            )
         else:
             representation = representation.reshape(
                 -1, group_num, representation.shape[-1]
