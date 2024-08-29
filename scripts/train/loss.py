@@ -1,5 +1,7 @@
 import torch
 
+from ..utils import gather_rep
+
 
 class SparseTrainingLoss:
     def __init__(self, weight=1):
@@ -15,22 +17,58 @@ class SparseTrainingLoss:
 
 
 class KLDivLoss(SparseTrainingLoss):
-    def __init__(self, in_batch_negatives=False, weight=1):
-        self.in_batch_negatives = in_batch_negatives
+    def __init__(self, use_in_batch_negatives=False, weight=1):
+        self.use_in_batch_negatives = use_in_batch_negatives
         self.loss = torch.nn.KLDivLoss(reduction="none")
         super().__init__(weight)
 
     def __call__(self, q_rep, d_rep, inputs, accelerator=None):
         teacher_scores = inputs["scores"]
 
-        if not self.in_batch_negatives:
+        if not self.use_in_batch_negatives:
             batch_size = q_rep.shape[0]
-            d_rep = d_rep.reshape(batch_size, d_rep.shape[0] // batch_size, -1)
+            d_rep = d_rep.reshape(
+                batch_size, d_rep.shape[0] // batch_size, d_rep.shape[-1]
+            )
             student_scores = torch.bmm(
                 d_rep, q_rep.reshape(batch_size, -1, 1)
             ).squeeze()
+        else:
+            d_rep = gather_rep(d_rep, accelerator)
+            student_scores = torch.matmul(q_rep, d_rep.t())
 
         student_scores = torch.log_softmax(student_scores, dim=1)
         teacher_scores = torch.softmax(teacher_scores, dim=1)
         loss = self.loss(student_scores, teacher_scores).sum(dim=1).mean(dim=0)
         return loss
+
+
+class InfoNCELoss(SparseTrainingLoss):
+    def __init__(self, weight=1, use_in_batch_negatives=False):
+        self.loss = torch.nn.CrossEntropyLoss()
+        self.use_in_batch_negatives = use_in_batch_negatives
+        super().__init__(weight)
+
+    def __call__(self, q_rep, d_rep, inputs, accelerator=None):
+        # q_rep: batch_size * dim
+        # d_rep: (batch_size*(1+neg_num)) * dim
+        bs = q_rep.shape[0]
+        indices = torch.arange(0, d_rep.shape[0], step=d_rep.shape[0] // bs)
+        pos_rep = d_rep[indices]
+        scores_pos = torch.matmul(q_rep, pos_rep.t()).diag().unsqueeze(-1)
+
+        mask = torch.ones(d_rep.shape[0], dtype=torch.bool)
+        mask[indices] = False
+        neg_rep = d_rep[mask]
+        if self.use_in_batch_negatives:
+            neg_rep = gather_rep(neg_rep, accelerator)
+            scores_neg = torch.matmul(q_rep, neg_rep.t())
+        else:
+            neg_rep = neg_rep.reshape(bs, -1, neg_rep.shape[-1])
+            scores_neg = torch.bmm(neg_rep, q_rep.reshape(bs, -1, 1)).reshape(bs, -1)
+
+        scores = torch.cat([scores_pos, scores_neg], dim=1)
+        target = torch.zeros(scores.shape).to(scores.device)
+        target[:, 0] = 1
+        output = self.loss(scores, target)
+        return output

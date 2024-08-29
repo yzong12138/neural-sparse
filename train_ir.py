@@ -10,9 +10,13 @@ import torch
 from dataclasses import dataclass, field, asdict
 
 from scripts.train.trainer import SparseModelTrainer
-from scripts.train.loss import KLDivLoss
-from scripts.data.dataset import KnowledgeDistillDataset, MsMarcoKDDataset
-from scripts.data.collator import KnowledgeDistillDataCollator
+from scripts.train.loss import KLDivLoss, InfoNCELoss
+from scripts.data.dataset import (
+    KnowledgeDistillDataset,
+    MsMarcoKDDataset,
+    PosNegsDataset,
+)
+from scripts.data.collator import KnowledgeDistillDataCollator, PosNegsDataCollator
 from scripts.ingest import ingest
 from scripts.search import search
 from scripts.utils import get_os_client, batch_search, set_logging, get_model
@@ -66,21 +70,52 @@ def main():
         if data_args.training_mode.split("-")[-1] == "marco":
             dataset = MsMarcoKDDataset(
                 score_dic_path=data_args.train_file,
-                sample_num=data_args.kd_sample_num,
+                sample_num=data_args.sample_num_one_query,
             )
-            # with open("data/toy_kd.json") as f:
-            #     data = json.load(f)
-            # dataset = KnowledgeDistillDataset(data, sample_num=data_args.kd_sample_num)
-            loss_functions.append(
-                KLDivLoss(
-                    in_batch_negatives=data_args.use_in_batch_negatives,
-                    weight=data_args.ranking_loss_weight,
-                )
+            data_collator = KnowledgeDistillDataCollator(
+                model.tokenizer, data_args.max_seq_length
+            )
+        elif data_args.training_mode.split("-")[-1] == "ensemble":
+            with open(data_args.train_file) as f:
+                data = f.readlines()
+            data = [json.loads(line) for line in data]
+            dataset = PosNegsDataset(
+                data, neg_sample_num=data_args.sample_num_one_query
+            )
+            data_collator = PosNegsDataCollator(
+                model.tokenizer, data_args.max_seq_length
+            )
+        else:
+            with open(data_args.train_file) as f:
+                data = f.readlines()
+            data = [json.loads(line) for line in data]
+            dataset = KnowledgeDistillDataset(
+                data, sample_num=data_args.sample_num_one_query
+            )
+            data_collator = KnowledgeDistillDataCollator(
+                model.tokenizer, data_args.max_seq_length
             )
 
-        data_collator = KnowledgeDistillDataCollator(
-            model.tokenizer, data_args.max_seq_length
+        loss_functions.append(
+            KLDivLoss(
+                use_in_batch_negatives=data_args.use_in_batch_negatives,
+                weight=data_args.ranking_loss_weight,
+            )
         )
+
+    elif data_args.training_mode.startswith("infonce"):
+        with open(data_args.train_file) as f:
+            data = f.readlines()
+        data = [json.loads(line) for line in data]
+        dataset = PosNegsDataset(data, neg_sample_num=data_args.sample_num_one_query)
+        loss_functions.append(
+            InfoNCELoss(
+                weight=data_args.ranking_loss_weight,
+                use_in_batch_negatives=data_args.use_in_batch_negatives,
+            )
+        )
+
+        data_collator = PosNegsDataCollator(model.tokenizer, data_args.max_seq_length)
 
     # split to eval
     optimizer = AdamW(
@@ -105,6 +140,8 @@ def main():
         optimizers=(optimizer, scheduler),
     )
 
+    if data_args.training_mode.split("-")[-1] == "ensemble":
+        trainer.set_bi_encoder_teacher()
     trainer.train()
 
 

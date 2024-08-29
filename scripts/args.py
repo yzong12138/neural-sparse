@@ -2,7 +2,7 @@ import sys
 import os
 
 from dataclasses import dataclass, field, asdict
-from typing import Optional
+from typing import Optional, Union
 from transformers import HfArgumentParser, TrainingArguments
 
 beir_datasets = "trec-covid,nfcorpus,nq,hotpotqa,fiqa,arguana,webis-touche2020,dbpedia-entity,scidocs,fever,climate-fever,scifact,quora"
@@ -16,13 +16,16 @@ class DataTrainingArguments:
     # dataset name split by comma
     beir_datasets: str = field(default=beir_datasets)
     training_mode: str = field(default="kd-marco")
-    kd_sample_num: int = field(default=2)
+    sample_num_one_query: int = field(default=2)
     use_in_batch_negatives: bool = field(default=False)
     flops_d_lambda: float = field(default=1e-3)
     flops_d_T: float = field(default=10000)
     flops_q_lambda: float = field(default=None)
     flops_q_T: float = field(default=None)
     ranking_loss_weight: float = field(default=1)
+    kd_ensemble_teacher_kwargs: Optional[Union[dict, str]] = field(
+        default_factory=dict,
+    )
 
     def __post_init__(self):
         return

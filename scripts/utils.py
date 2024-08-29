@@ -5,13 +5,33 @@ from aiohttp import ClientTimeout
 import json
 import logging
 import sys
-
+import torch
 import torch.distributed as dist
 import torch.nn as nn
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 from opensearchpy import OpenSearch
 from .model.sparse_encoders import SparseModel
+
+
+def gather_rep(rep, accelerator):
+    if accelerator.num_processes == 1:
+        return rep
+    all_rep = accelerator.gather(rep)
+    size = rep.shape[0]
+    local_index = accelerator.local_process_index
+    reo_others = (
+        torch.cat(
+            [
+                all_rep[: local_index * size],
+                all_rep[local_index * size + size :],
+            ]
+        )
+        .detach()
+        .clone()
+    )
+    rep = torch.cat([rep, reo_others], dim=0)
+    return rep
 
 
 def is_ddp_enabled():

@@ -3,6 +3,8 @@ import logging
 import torch
 
 from ..model.sparse_encoders import SparseModel
+from .bi_encoder_wrapper import BiEncoderWrapper
+from ..utils import gather_rep
 
 from transformers import Trainer
 
@@ -49,33 +51,12 @@ class SparseModelTrainer(Trainer):
         # but detach their grad. We only consider the grad for representation at local device
         # note representation is one element of all_representations
         # group num: how many semantic similar documents representations in one batch
-        if self.accelerator.num_processes > 1:
-            all_representation = self.accelerator.gather(representation)
-            batch_size = representation.shape[0]
-            local_index = self.accelerator.local_process_index
-            base_representation = (
-                torch.cat(
-                    [
-                        all_representation[: local_index * batch_size],
-                        all_representation[local_index * batch_size + batch_size :],
-                    ]
-                )
-                .detach()
-                .clone()
-            )
-            representation = torch.cat([base_representation, representation])
-            representation = representation.reshape(
-                -1, group_num, representation.shape[-1]
-            )
-            return (
-                torch.sum(torch.mean(torch.abs(representation), dim=0) ** 2)
-                * self.accelerator.num_processes
-            )
-        else:
-            representation = representation.reshape(
-                -1, group_num, representation.shape[-1]
-            )
-            return torch.sum(torch.mean(torch.abs(representation), dim=0) ** 2)
+        representation = gather_rep(representation, accelerator=self.accelerator)
+        representation = representation.reshape(-1, group_num, representation.shape[-1])
+        return (
+            torch.sum(torch.mean(torch.abs(representation), dim=0) ** 2)
+            * self.accelerator.num_processes
+        )
 
     def get_lambda(self, lambda_value, lambda_T):
         if self.state.global_step >= lambda_T:
@@ -84,6 +65,12 @@ class SparseModelTrainer(Trainer):
         return lambda_value * (step / lambda_T) ** 2
 
     def compute_loss(self, model: SparseModel, inputs, return_outputs=False):
+        if hasattr(self, "bi_encoder_teacher"):
+            scores = self.bi_encoder_teacher.get_scores(
+                q_features=inputs["query"], d_features=inputs["docs"]
+            )
+            inputs["scores"] = scores
+
         flops_loss = 0
 
         # we construct this input and model wrapper to make it work for both data parallel and DDP
@@ -140,4 +127,21 @@ class SparseModelTrainer(Trainer):
                 safe_serialization=self.args.save_safetensors,
             )
 
-        # self.accelerator.wait_for_everyone()
+    def set_bi_encoder_teacher(self):
+        self.bi_encoder_teacher = BiEncoderWrapper(
+            types=self.data_args.kd_ensemble_teacher_kwargs["types"],
+            model_ids=self.data_args.kd_ensemble_teacher_kwargs["model_ids"],
+            use_in_batch_negatives=self.data_args.use_in_batch_negatives,
+            score_scale=self.data_args.kd_ensemble_teacher_kwargs.get(
+                "score_scale", 30
+            ),
+        )
+        self.bi_encoder_teacher.accelerator = self.accelerator
+        for i, model in enumerate(self.bi_encoder_teacher.models):
+            self._move_model_to_device(model, self.args.device)
+            self.bi_encoder_teacher.models[i] = self._wrap_model(model, training=False)
+            use_accelerator_prepare = (
+                True if model is self.bi_encoder_teacher.models[i] else False
+            )
+            if use_accelerator_prepare:
+                self.accelerator.prepare(self.bi_encoder_teacher.models[i])

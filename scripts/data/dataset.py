@@ -148,3 +148,35 @@ class MsMarcoKDDataset(KnowledgeDistillDataset):
 
     def __getitem__(self, idx):
         return self.data[idx]
+
+
+class PosNegsDataset(Dataset):
+    def __init__(self, data, neg_sample_num=3):
+        """
+        Args:
+            data: A list of dictionary which have "query", "pos" and "negs" list.
+                An example: {"query":"hi","pos":"hello","negs":["hi","world"]}
+                "negs" is optional
+        """
+        assert neg_sample_num >= 1
+        self.data = []
+        logger.info(f"input data number: {len(data)}")
+        for dict_ in data:
+            dict_["negs"] = dict_["negs"]
+            for i in range(0, len(dict_.get("negs", [])), neg_sample_num):
+                if len(dict_["negs"]) - i < neg_sample_num:
+                    break
+                self.data.append(
+                    [
+                        dict_["query"],
+                        dict_["pos"],
+                        dict_.get("negs", [])[i : i + neg_sample_num],
+                    ]
+                )
+        logger.info(f"after process data number: {len(self.data)}")
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        return self.data[idx]
