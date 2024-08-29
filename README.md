@@ -51,7 +51,8 @@ done
 ```
 
 ## Run with infoNCE loss
-Run with data parallel:
+Training with infoNCE loss. It pushes the model generates higher scores for the positive pairs than all other pairs. The training mode should be `infonce`.
+
 ```
 python train_ir.py config_infonce.yaml
 ```
@@ -62,7 +63,6 @@ N_DEVICES=8
 torchrun --nproc_per_node=${N_DEVICES} train_ir.py config_infonce.yaml
 ```
 
-
 Data file is a jsonl file, each line is a data sample like this:
 ```json
 {
@@ -72,38 +72,24 @@ Data file is a jsonl file, each line is a data sample like this:
 }
 ```
 
-An example to train on BEIR scifact dataset then evaluate the checkpoints:
-```
-N_DEVICES=8
-torchrun --nproc_per_node=${N_DEVICES} train_ir.py config_infonce.yaml
+## Run with knowledge distillation (ensemble teachers)
+To ensemble dense and sparse teachers to generate superversary signals for knowledge distillation. The training_mode should be `kd-ensemble`. The superverary signals are generated dynamically during training.
 
-for step in {500,1000,1500}
-do
-OUTPUT_DIR="output/test"
-torchrun --nproc_per_node=8 evaluate_beir.py \
-  --model_name_or_path ${OUTPUT_DIR}/checkpoint-${step} \
-  --inf_free true \
-  --idf_path idf.json \
-  --output_dir ${OUTPUT_DIR} \
-  --log_level info \
-  --beir_datasets scifact \
-  --per_device_eval_batch_size 50
-done
-```
-
-## Run with knowledge distillation (scores pre-computed)
 Run with data parallel:
 ```
-python train_ir.py config.yaml
+python train_ir.py config_kd.yaml
 ```
 Run with distributed data parallel:
 ```
 # the number of GPU
 N_DEVICES=8
-torchrun --nproc_per_node=${N_DEVICES} train_ir.py config.yaml
+torchrun --nproc_per_node=${N_DEVICES} train_ir.py config_kd.yaml
 ```
 
-To change hyperparameters, please check the args in config file.
+The data file has the same format as training with infoNCE.
+
+## Run with knowledge distillation (scores pre-computed)
+For expensive teacher models like LLM or cross-encoders, we can calculate the scores in advance and store the scores. To run with pre-computed KD scores, The training_mode should be `kd`.
 
 Data file is a jsonl file, each line is a data sample like this:
 ```json
