@@ -1,7 +1,6 @@
 import json
 import logging
 import random
-import torch
 
 from tqdm import tqdm
 from beir import util

@@ -7,8 +7,6 @@ import logging
 import sys
 import torch
 import torch.distributed as dist
-import torch.nn as nn
-from torch.nn.parallel import DistributedDataParallel as DDP
 
 from opensearchpy import OpenSearch
 from .model.sparse_encoders import SparseModel

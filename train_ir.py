@@ -1,13 +1,9 @@
-import torch.utils
-import torch.utils.data
 import yaml
 import logging
 import os
 import json
-import random
 import sys
-import torch
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict
 
 from scripts.train.trainer import SparseModelTrainer
 from scripts.train.loss import KLDivLoss, InfoNCELoss
@@ -17,28 +13,10 @@ from scripts.data.dataset import (
     PosNegsDataset,
 )
 from scripts.data.collator import KnowledgeDistillDataCollator, PosNegsDataCollator
-from scripts.ingest import ingest
-from scripts.search import search
-from scripts.utils import get_os_client, batch_search, set_logging, get_model
-from scripts.args import ModelArguments, DataTrainingArguments, parse_args
+from scripts.utils import set_logging, get_model
+from scripts.args import parse_args
 
-import transformers
-from transformers import (
-    AutoConfig,
-    AutoModelForSequenceClassification,
-    AutoTokenizer,
-    DataCollatorWithPadding,
-    EvalPrediction,
-    HfArgumentParser,
-    PretrainedConfig,
-    Trainer,
-    TrainingArguments,
-    default_data_collator,
-    set_seed,
-)
-from transformers.trainer_utils import get_last_checkpoint
-from transformers.utils import check_min_version, send_example_telemetry
-from transformers.utils.versions import require_version
+from transformers import set_seed
 from transformers.optimization import AdamW, get_linear_schedule_with_warmup
 
 logger = logging.getLogger(__name__)

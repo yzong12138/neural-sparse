@@ -1,19 +1,11 @@
 import logging
 import os
 import torch
-from dataclasses import dataclass, field, asdict
-from typing import Optional
-import torch.utils
-import torch.utils.data
 from tqdm import tqdm
 
-import numpy as np
-import asyncio
-from datasets import load_dataset
-
 from .model.sparse_encoders import SparseModel, SparseEncoder, sparse_embedding_to_query
-from .data.dataset import BEIRCorpusDataset, KeyValueDataset
-from .utils import get_os_client, batch_search
+from .data.dataset import KeyValueDataset
+from .utils import batch_search
 
 logger = logging.getLogger(__name__)
 

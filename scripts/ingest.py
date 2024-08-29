@@ -1,19 +1,14 @@
 import os
 import os.path
 
-import torch.distributed
-import transformers
-import argparse
 import asyncio
 import torch
 import logging
 
-from beir import util
-from beir.datasets.data_loader import GenericDataLoader
 from tqdm.auto import tqdm
 
 from .model.sparse_encoders import SparseModel, SparseEncoder
-from .utils import do_bulk, is_ddp_enabled, get_os_client
+from .utils import do_bulk, get_os_client
 from .data.dataset import DDPDatasetWithRank
 from torch.utils.data import DataLoader, Dataset
 

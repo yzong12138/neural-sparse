@@ -1,7 +1,7 @@
 import sys
 import os
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from typing import Optional, Union
 from transformers import HfArgumentParser, TrainingArguments
 
