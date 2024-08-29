@@ -43,7 +43,6 @@ class SparseModel(torch.nn.Module):
             output * kwargs.get("attention_mask").unsqueeze(-1), dim=1
         )
         values = torch.log(1 + torch.relu(values))
-        values[:, self.special_token_ids] = 0
         return values
 
     def _encode_inf_free(self, **kwargs):
