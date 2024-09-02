@@ -19,7 +19,6 @@ async def search(
     batch_size: int = 50,
     result_size: int = 15,
 ):
-    device = model.backbone.device
     os.makedirs(out_dir, exist_ok=True)
 
     queries_dataset = KeyValueDataset(queries)
@@ -28,7 +27,6 @@ async def search(
     query_encoder = SparseEncoder(
         sparse_model=model,
         max_length=max_length,
-        device=device,
         do_count=True,
     )
 
@@ -58,7 +56,8 @@ async def search(
     count = query_encoder.count_tensor
     count = count / len(queries_dataset)
     count_doc = torch.load(
-        os.path.join(out_dir, index_name + ".corpus.bin"), map_location=device
+        os.path.join(out_dir, index_name + ".corpus.bin"),
+        map_location=model.backbone.device,
     )
     flops = float(torch.matmul(count, count_doc).cpu())
     q_length = float(count.sum().cpu())

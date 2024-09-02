@@ -48,13 +48,12 @@ async def ingest(
     )
     dataloader = DataLoader(ddp_dataset, batch_size=batch_size)
 
+    accelerator.prepare(model)
     sparse_encoder = SparseEncoder(
         sparse_model=model,
         max_length=max_length,
-        device=f"cuda:{accelerator.local_process_index}",
         do_count=True,
     )
-    sparse_encoder.accelerator_prepare(accelerator=accelerator)
 
     # prepare index
     if accelerator.is_local_main_process:

@@ -79,21 +79,17 @@ class SparsePostProcessor(object):
 
 
 class SparseEncoder:
-    def __init__(self, sparse_model, max_length, device, do_count=True):
+    def __init__(self, sparse_model, max_length, do_count=True):
         self.model = sparse_model
         self.tokenizer = sparse_model.tokenizer
         self.post_processor = SparsePostProcessor(tokenizer=sparse_model.tokenizer)
         self.do_count = do_count
         self.max_length = max_length
-        self.device = device
+        self.device = self.model.backbone.device
         self.count_tensor = torch.zeros(self.tokenizer.vocab_size).to(self.device)
 
     def reset_count(self):
         self.count_tensor = torch.zeros(self.tokenizer.vocab_size).to(self.device)
-
-    def accelerator_prepare(self, accelerator):
-        accelerator.prepare(self.model)
-        return
 
     def encode(self, texts, inf_free=False):
         features = self.tokenizer(
