@@ -5,7 +5,8 @@ torchrun --nproc_per_node=${N_DEVICES} demo_train_data.py \
   --model_name_or_path opensearch-project/opensearch-neural-sparse-encoding-doc-v2-mini \
   --inf_free true \
   --idf_path idf.json \
-  --beir_dir data/beir
+  --beir_dir data/beir \
+  --beir_datasets scifact
 
 torchrun --nproc_per_node=${N_DEVICES} train_ir.py config_infonce.yaml
 

@@ -85,12 +85,13 @@ def main():
     avg_res = dict()
     for dataset in datasets:
         # if the dataset wasn't download before, only download it on main process
-        if accelerator.is_local_main_process:
+        if accelerator.is_local_main_process and not os.path.exists(
+            os.path.join(data_args.beir_dir, dataset)
+        ):
             url = f"https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/{dataset}.zip"
             data_path = util.download_and_unzip(url, data_args.beir_dir)
         accelerator.wait_for_everyone()
-        url = f"https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/{dataset}.zip"
-        data_path = util.download_and_unzip(url, data_args.beir_dir)
+        data_path = os.path.join(data_args.beir_dir, dataset)
         corpus, queries, qrels = GenericDataLoader(data_folder=data_path).load(
             split="test"
         )

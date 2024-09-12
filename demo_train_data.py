@@ -1,3 +1,4 @@
+import os
 import json
 import asyncio
 
@@ -22,13 +23,18 @@ def main():
     accelerator.wait_for_everyone()
     model = get_model(model_args)
 
-    dataset = "scifact"
-    if accelerator.is_local_main_process:
+    dataset = data_args.beir_datasets.split(",")
+    if len(dataset) != 1:
+        raise Exception("can only accept one beir dataset")
+    else:
+        dataset = dataset[0]
+    if accelerator.is_local_main_process and not os.path.exists(
+        os.path.join(data_args.beir_dir, dataset)
+    ):
         url = f"https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/{dataset}.zip"
         data_path = util.download_and_unzip(url, data_args.beir_dir)
     accelerator.wait_for_everyone()
-    url = f"https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/{dataset}.zip"
-    data_path = util.download_and_unzip(url, data_args.beir_dir)
+    data_path = os.path.join(data_args.beir_dir, dataset)
     corpus, queries, qrels = GenericDataLoader(data_folder=data_path).load(
         split="train"
     )
@@ -80,7 +86,7 @@ def main():
                     }
                 )
 
-        with open("data/scifact_train.jsonl", "w") as f:
+        with open(f"data/{dataset}_train.jsonl", "w") as f:
             for line in data:
                 f.write(json.dumps(line) + "\n")
 
