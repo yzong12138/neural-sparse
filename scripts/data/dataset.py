@@ -67,7 +67,7 @@ class DDPDatasetWithRank(Dataset):
 
 
 class KnowledgeDistillDataset(Dataset):
-    def __init__(self, all_data, sample_num=2):
+    def __init__(self, all_data, sample_num=2, shuffle=True):
         """
         Args:
             data: A list of dictionary which have "query", "docs" and "scores" list.
@@ -83,21 +83,34 @@ class KnowledgeDistillDataset(Dataset):
             scores = data["scores"]
             assert len(texts) == len(scores)
 
-            idxs = list(range(len(scores)))
-            random.shuffle(idxs)
-            for i in range(0, len(scores), sample_num):
-                # we need to make sure all samples have same negative number
-                # to split all documents and perform matmul
-                if len(scores) - i < sample_num:
-                    break
-                sample_idxs = idxs[i : i + sample_num]
-                self.data.append(
-                    [
-                        query,
-                        [texts[idx] for idx in sample_idxs],
-                        [scores[idx] for idx in sample_idxs],
-                    ]
-                )
+            if shuffle:
+                idxs = list(range(len(scores)))
+                random.shuffle(idxs)
+                for i in range(0, len(scores), sample_num):
+                    # we need to make sure all samples have same negative number
+                    # to split all documents and perform matmul
+                    if len(scores) - i < sample_num:
+                        break
+                    sample_idxs = idxs[i : i + sample_num]
+                    self.data.append(
+                        [
+                            query,
+                            [texts[idx] for idx in sample_idxs],
+                            [scores[idx] for idx in sample_idxs],
+                        ]
+                    )
+            else:
+                idxs = list(range(len(scores)))
+                step = len(scores) // sample_num
+                for i in range(0, step):
+                    sample_idxs = [idxs[j * step + i] for j in range(sample_num)]
+                    self.data.append(
+                        [
+                            query,
+                            [texts[idx] for idx in sample_idxs],
+                            [scores[idx] for idx in sample_idxs],
+                        ]
+                    )
         logger.info(
             f"KnowledgeDistillDataset after process data number: {len(self.data)}"
         )
@@ -140,7 +153,7 @@ class MsMarcoKDDataset(KnowledgeDistillDataset):
             data = {"query": queries[q_id], "docs": texts, "scores": scores}
             all_data.append(data)
 
-        super().__init__(all_data=all_data, sample_num=sample_num)
+        super().__init__(all_data=all_data, sample_num=sample_num, shuffle=False)
 
     def __len__(self):
         return len(self.data)
