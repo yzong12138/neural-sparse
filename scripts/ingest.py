@@ -78,6 +78,7 @@ async def ingest(
                     },
                 },
             },
+            params={"timeout": 1000},
         )
     accelerator.wait_for_everyone()
 
@@ -109,7 +110,7 @@ async def ingest(
     all_count_tensor = accelerator.gather(sparse_encoder.count_tensor)
 
     if accelerator.is_local_main_process:
-        os_client.indices.refresh(index_name, timeout=60)
+        os_client.indices.refresh(index_name, params={"timeout": 1000})
         all_count_tensor = all_count_tensor.sum(dim=0)
         all_count_tensor = all_count_tensor / len(dataset)
         all_count_tensor = all_count_tensor.cpu()

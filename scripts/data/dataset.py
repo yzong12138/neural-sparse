@@ -2,10 +2,13 @@ import json
 import logging
 import random
 
+from itertools import chain
 from tqdm import tqdm
+from datasets import load_dataset
 from beir import util
 from beir.datasets.data_loader import GenericDataLoader
 from torch.utils.data import Dataset
+from torch.utils.data.dataloader import DataLoader, Sampler, RandomSampler, BatchSampler
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +52,26 @@ class BEIRCorpusDataset(KeyValueDataset):
 
         # Initialize the base class with the combined corpus
         super().__init__(combined_corpus)
+
+
+class MiraclCorpusDataset:
+    def __init__(self, corpus):
+        """
+        Args:
+            corpus (dict): The corpus dictionary where each key is a document ID, and the value is a dictionary with "title" and "text".
+        """
+        # Combine the title and text into a single string
+        logger.info("start parsing miracl corpus")
+        self.corpus = corpus
+
+    def __len__(self):
+        return len(self.corpus)
+
+    def __getitem__(self, idx):
+        data = self.corpus[idx]
+        key = data["docid"]
+        value = data["title"] + " " + data["text"]
+        return key, value
 
 
 class DDPDatasetWithRank(Dataset):
@@ -173,7 +196,7 @@ class PosNegsDataset(Dataset):
         assert neg_sample_num >= 1
         self.data = []
         logger.info(f"input data number: {len(data)}")
-        for dict_ in data:
+        for dict_ in tqdm(data):
             dict_["negs"] = dict_["negs"]
             for i in range(0, len(dict_.get("negs", [])), neg_sample_num):
                 if len(dict_["negs"]) - i < neg_sample_num:
@@ -192,3 +215,71 @@ class PosNegsDataset(Dataset):
 
     def __getitem__(self, idx):
         return self.data[idx]
+
+
+class MiraclTrainingDataset(Dataset):
+    def __init__(self, lang="en", source="miracl/miracl", dataset=None):
+        if dataset is None:
+            miracl = load_dataset(source, lang, trust_remote_code=True)
+            self.dataset = miracl["train"]
+        else:
+            self.dataset = dataset
+
+        self.idx_to_data = []
+        self.neg_passages = []
+        for i, data in tqdm(enumerate(self.dataset)):
+            for j in range(len(data["positive_passages"])):
+                self.idx_to_data.append((i, j))
+            self.neg_passages.append([neg["text"] for neg in data["negative_passages"]])
+
+    def __len__(self):
+        return len(self.idx_to_data)
+
+    def __getitem__(self, idx):
+        i = self.idx_to_data[idx][0]
+        j = self.idx_to_data[idx][1]
+        return {
+            "query": self.dataset[i]["query"],
+            "pos": self.dataset[i]["positive_passages"][j]["text"],
+            "negs": self.neg_passages[i],
+        }
+
+
+class CombinedRandomSampler(Sampler):
+    def __init__(self, datasets, batch_size, drop_last=True):
+        self.datasets = datasets
+        self.batch_size = batch_size
+        self.samplers = [
+            BatchSampler(
+                RandomSampler(dataset), batch_size=batch_size, drop_last=drop_last
+            )
+            for dataset in datasets
+        ]
+
+    def __iter__(self):
+        dataset_sequences = [
+            [i] * len(self.samplers[i]) for i in range(len(self.samplers))
+        ]
+        dataset_sequences = list(chain(*dataset_sequences))
+        random.shuffle(dataset_sequences)
+
+        iters = [iter(sampler) for sampler in self.samplers]
+        for dataset_idx in dataset_sequences:
+            idxs = next(iters[dataset_idx])
+            yield [[dataset_idx, idx] for idx in idxs]
+
+    def __len__(self):
+        return sum(map(len, self.samplers))
+
+
+class CombinedDataset(Dataset):
+    def __init__(self, datasets):
+        self.datasets = datasets
+        self.length = sum(map(len, self.datasets))
+
+    def __len__(self):
+        return self.length
+
+    def __getitem__(self, idx):
+        dataset_idx, data_idx = idx
+        return self.datasets[dataset_idx][data_idx]

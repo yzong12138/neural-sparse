@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 from .model.sparse_encoders import SparseModel, SparseEncoder, sparse_embedding_to_query
 from .data.dataset import KeyValueDataset
-from .utils import batch_search
+from .utils import batch_search, get_os_client
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +18,7 @@ async def search(
     max_length: int = 512,
     batch_size: int = 50,
     result_size: int = 15,
+    delete: bool = False,
 ):
     os.makedirs(out_dir, exist_ok=True)
 
@@ -65,6 +66,10 @@ async def search(
     logger.info(
         f"Index_name: {index_name}, flops: {flops}, d_length:{d_length}, q_length:{q_length}"
     )
+
+    if delete:
+        client = get_os_client()
+        client.indices.delete(index_name, params={"timeout": 1000})
 
     return {
         "run_res": run_res,

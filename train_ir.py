@@ -11,11 +11,15 @@ from scripts.data.dataset import (
     KnowledgeDistillDataset,
     MsMarcoKDDataset,
     PosNegsDataset,
+    MiraclTrainingDataset,
+    CombinedDataset,
+    CombinedRandomSampler,
 )
 from scripts.data.collator import KnowledgeDistillDataCollator, PosNegsDataCollator
 from scripts.utils import set_logging, get_model
-from scripts.args import parse_args
+from scripts.args import parse_args, miracl_datasets, tydi_datasets
 
+from datasets import Dataset
 from transformers import set_seed
 from transformers.optimization import AdamW, get_linear_schedule_with_warmup
 
@@ -82,10 +86,48 @@ def main():
         )
 
     elif data_args.training_mode.startswith("infonce"):
-        with open(data_args.train_file) as f:
-            data = f.readlines()
-        data = [json.loads(line) for line in data]
-        dataset = PosNegsDataset(data, neg_sample_num=data_args.sample_num_one_query)
+        datasets = []
+        for lang in miracl_datasets.split(","):
+            datasets.append(
+                PosNegsDataset(
+                    MiraclTrainingDataset(lang),
+                    neg_sample_num=data_args.sample_num_one_query,
+                )
+            )
+            logger.info(
+                f"load training data for miracl {lang}. Sample number: {len(datasets[-1])}"
+            )
+
+        for lang in tydi_datasets.split(","):
+            datasets.append(
+                PosNegsDataset(
+                    MiraclTrainingDataset(lang, source="castorini/mr-tydi"),
+                    neg_sample_num=data_args.sample_num_one_query,
+                )
+            )
+            logger.info(
+                f"load training data for miracl {lang}. Sample number: {len(datasets[-1])}"
+            )
+
+        for corpus in [
+            "eli5_question_answer",
+            "squad_pairs",
+            "NQ-train_pairs",
+            "hotpotqa",
+            "stackexchange_duplicate_questions_title_title",
+            "yahoo_answers_title_answer",
+        ]:
+            dataset = Dataset.load_from_disk((f"mdata/{corpus}"))
+            datasets.append(
+                PosNegsDataset(
+                    MiraclTrainingDataset("en", dataset=dataset),
+                    neg_sample_num=data_args.sample_num_one_query,
+                )
+            )
+
+        dataset = CombinedDataset(datasets)
+        data_collator = PosNegsDataCollator(model.tokenizer, data_args.max_seq_length)
+
         loss_functions.append(
             InfoNCELoss(
                 weight=data_args.ranking_loss_weight,

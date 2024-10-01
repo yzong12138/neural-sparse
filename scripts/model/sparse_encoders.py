@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 class SparseModel(torch.nn.Module):
-    def __init__(self, model_id, idf=None, tokenizer_id=None):
+    def __init__(self, model_id, idf=None, tokenizer_id=None, split_batch=1):
         super().__init__()
 
         if tokenizer_id is None:
@@ -28,6 +28,7 @@ class SparseModel(torch.nn.Module):
         self.idf_vector = torch.nn.Parameter(
             torch.tensor(idf_vector), requires_grad=False
         )
+        self.split_batch = split_batch
 
     def forward(self, inf_free=False, **kwargs):
         # input kwargs is the features from tokenizer
@@ -37,12 +38,33 @@ class SparseModel(torch.nn.Module):
             return self._encode(**kwargs)
 
     def _encode(self, **kwargs):
-        output = self.backbone(**kwargs)[0]
-        values, _ = torch.max(
-            output * kwargs.get("attention_mask").unsqueeze(-1), dim=1
-        )
-        values = torch.log(1 + torch.relu(values))
-        return values
+        batch_size = kwargs["input_ids"].size(0)
+        split_sizes = [batch_size // self.split_batch] * self.split_batch
+        remainder = batch_size % self.split_batch
+        for i in range(remainder):
+            split_sizes[i] += 1
+
+        outputs = []
+        start = 0
+        for split_size in split_sizes:
+            end = start + split_size
+            sub_kwargs = {k: v[start:end] for k, v in kwargs.items()}
+            output = self.backbone(**sub_kwargs)[0]
+            values, _ = torch.max(
+                output * sub_kwargs.get("attention_mask").unsqueeze(-1), dim=1
+            )
+            values = torch.log(1 + torch.relu(values))
+            outputs.append(values)
+            start = end
+
+        output = torch.cat(outputs, dim=0)
+        return output
+        # output = self.backbone(**kwargs)[0]
+        # values, _ = torch.max(
+        #     output * kwargs.get("attention_mask").unsqueeze(-1), dim=1
+        # )
+        # values = torch.log(1 + torch.relu(values))
+        # return values
 
     def _encode_inf_free(self, **kwargs):
         input_ids = kwargs.get("input_ids")

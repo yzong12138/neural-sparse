@@ -5,8 +5,11 @@ import torch
 from ..model.sparse_encoders import SparseModel
 from .bi_encoder_wrapper import BiEncoderWrapper
 from ..utils import gather_rep
+from ..data.dataset import CombinedRandomSampler, CombinedDataset
 
 from transformers import Trainer
+from transformers.trainer_utils import seed_worker
+from torch.utils.data import DataLoader
 
 logger = logging.getLogger(__name__)
 
@@ -145,3 +148,39 @@ class SparseModelTrainer(Trainer):
             )
             if use_accelerator_prepare:
                 self.accelerator.prepare(self.bi_encoder_teacher.models[i])
+
+    def get_train_dataloader(self) -> DataLoader:
+        if self.train_dataset is None:
+            raise ValueError("Trainer: training requires a train_dataset.")
+
+        train_dataset = self.train_dataset
+        data_collator = self.data_collator
+        data_collator = self._get_collator_with_removed_columns(
+            data_collator, description="training"
+        )
+
+        dataloader_params = {
+            "batch_size": self._train_batch_size,
+            "collate_fn": data_collator,
+            "num_workers": self.args.dataloader_num_workers,
+            "pin_memory": self.args.dataloader_pin_memory,
+            "persistent_workers": self.args.dataloader_persistent_workers,
+        }
+
+        if not isinstance(train_dataset, torch.utils.data.IterableDataset):
+            dataloader_params["sampler"] = self._get_train_sampler()
+            dataloader_params["drop_last"] = self.args.dataloader_drop_last
+            dataloader_params["worker_init_fn"] = seed_worker
+            dataloader_params["prefetch_factor"] = self.args.dataloader_prefetch_factor
+
+        if isinstance(train_dataset, CombinedDataset):
+            logger.info("Combined dataset. Set combined sampler.")
+            sampler = CombinedRandomSampler(
+                train_dataset.datasets, batch_size=self._train_batch_size
+            )
+            dataloader_params.pop("sampler")
+            dataloader_params.pop("batch_size")
+            dataloader_params.pop("drop_last")
+            dataloader_params["batch_sampler"] = sampler
+
+        return self.accelerator.prepare(DataLoader(train_dataset, **dataloader_params))
