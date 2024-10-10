@@ -2,6 +2,7 @@ import torch
 import transformers
 import itertools
 import logging
+from transformers import AutoModelForMaskedLM, BertForMaskedLM
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,14 @@ class SparseModel(torch.nn.Module):
             return self._encode(**kwargs)
 
     def _encode(self, **kwargs):
+        if self.split_batch == 1:
+            output = self.backbone(**kwargs)[0]
+            values, _ = torch.max(
+                output * kwargs.get("attention_mask").unsqueeze(-1), dim=1
+            )
+            values = torch.log(1 + torch.relu(values))
+            return values
+
         batch_size = kwargs["input_ids"].size(0)
         split_sizes = [batch_size // self.split_batch] * self.split_batch
         remainder = batch_size % self.split_batch
@@ -46,25 +55,22 @@ class SparseModel(torch.nn.Module):
 
         outputs = []
         start = 0
+        assert isinstance(self.backbone, BertForMaskedLM)
+
+        attention_mask = kwargs.get("attention_mask")
+        output = self.backbone.bert(**kwargs)[0]
         for split_size in split_sizes:
             end = start + split_size
-            sub_kwargs = {k: v[start:end] for k, v in kwargs.items()}
-            output = self.backbone(**sub_kwargs)[0]
+            values = self.backbone.cls(output[start:end])
             values, _ = torch.max(
-                output * sub_kwargs.get("attention_mask").unsqueeze(-1), dim=1
+                values * attention_mask[start:end].unsqueeze(-1), dim=1
             )
-            values = torch.log(1 + torch.relu(values))
             outputs.append(values)
             start = end
 
         output = torch.cat(outputs, dim=0)
+        output = torch.log(1 + torch.relu(output))
         return output
-        # output = self.backbone(**kwargs)[0]
-        # values, _ = torch.max(
-        #     output * kwargs.get("attention_mask").unsqueeze(-1), dim=1
-        # )
-        # values = torch.log(1 + torch.relu(values))
-        # return values
 
     def _encode_inf_free(self, **kwargs):
         input_ids = kwargs.get("input_ids")

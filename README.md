@@ -6,7 +6,7 @@ conda create -n neural-sparse python=3.9
 conda activate neural-sparse
 conda install pytorch==1.11.0 cudatoolkit=10.2 -c pytorch
 conda install numpy
-conda install -c conda-forge accelerate transformers datasets
+conda install -c conda-forge transformers=4.44.1 accelerate datasets
 pip install opensearch-py beir
 ```
 

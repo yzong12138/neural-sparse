@@ -2,32 +2,33 @@ logging_steps: 500
 # log_level_replica: info
 
 inf_free: true
-model_name_or_path: distilbert/distilbert-base-multilingual-cased
-tokenizer_name: distilbert/distilbert-base-multilingual-cased
-# idf_path: idf.json
+model_name_or_path: google-bert/bert-base-multilingual-uncased
+tokenizer_name: google-bert/bert-base-multilingual-uncased
+split_batch: 4
+idf_path: multilingual_idf_uncased_norm.json
 
 max_seq_length: 256
 beir_dir: data/beir
 training_mode: infonce
 # train_file: data/msmarco_mixed_scores_v3.json
-sample_num_one_query: 3
+sample_num_one_query: 1
 use_in_batch_negatives: true
 flops_d_lambda: 0.02
 flops_d_T: 10000
 ranking_loss_weight: 1
 
-output_dir: output/multi-noidf
+output_dir: output/multi-idf-uncased-norm
 per_device_eval_batch_size: 50
-per_device_train_batch_size: 8
+per_device_train_batch_size: 12
 
 log_level: info
-max_steps: 100000
+max_steps: 50000
 fp16: true
 learning_rate: 0.00002
 weight_decay: 0.01
 lr_scheduler_type: linear
 warmup_steps: 6000
 save_strategy: steps
-save_steps: 50000
+save_steps: 25000
 dataloader_drop_last: true
 max_grad_norm: null
