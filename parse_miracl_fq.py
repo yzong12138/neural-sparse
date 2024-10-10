@@ -80,14 +80,14 @@ class IDFRepWrapper:
         return idf
 
 
-idf_wrapper = IDFRepWrapper("distilbert/distilbert-base-multilingual-cased")
+idf_wrapper = IDFRepWrapper("google-bert/bert-base-multilingual-uncased")
 miracl_corpus = load_dataset(dataset_source, lang, trust_remote_code=True)["train"]
 text_list = miracl_corpus["text"]
 idf = idf_wrapper.get_idf(text_list, return_fq=True)
 
 data = {"corpus": source, "lang": lang, "length": len(text_list), "fq_tensor": idf}
 
-os.makedirs(f"idf/{source}/", exist_ok=True)
-torch.save(data, f"idf/{source}/{lang}.bin")
+os.makedirs(f"idf-uncased/{source}/", exist_ok=True)
+torch.save(data, f"idf-uncased/{source}/{lang}.bin")
 
 logger.info(f"finish {lang}")
