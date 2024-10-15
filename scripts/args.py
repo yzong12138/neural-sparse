@@ -6,7 +6,7 @@ from typing import Optional, Union
 from transformers import HfArgumentParser, TrainingArguments
 
 beir_datasets = "trec-covid,nfcorpus,nq,hotpotqa,fiqa,arguana,webis-touche2020,dbpedia-entity,scidocs,fever,climate-fever,scifact,quora"
-miracl_datasets = "en,bn,te,es,fr,id,hi,ru,ar,zh,fa,ja,fi,sw,ko"
+miracl_datasets = "bn,te,es,fr,id,hi,ru,ar,zh,fa,ja,fi,sw,ko,en"
 tydi_datasets = (
     "arabic,bengali,english,finnish,indonesian,japanese,korean,russian,swahili,telugu"
 )
