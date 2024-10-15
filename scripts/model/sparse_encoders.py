@@ -2,7 +2,9 @@ import torch
 import transformers
 import itertools
 import logging
-from transformers import AutoModelForMaskedLM, BertForMaskedLM
+
+from .decomposition_bert import DecompBertConfig, DecompBertForMaskedLM
+from transformers import AutoModelForMaskedLM, BertForMaskedLM, AutoConfig
 
 logger = logging.getLogger(__name__)
 
@@ -10,6 +12,9 @@ logger = logging.getLogger(__name__)
 class SparseModel(torch.nn.Module):
     def __init__(self, model_id, idf=None, tokenizer_id=None, split_batch=1):
         super().__init__()
+
+        AutoConfig.register("DecompBert", DecompBertConfig)
+        AutoModelForMaskedLM.register(DecompBertConfig, DecompBertForMaskedLM)
 
         if tokenizer_id is None:
             tokenizer_id = model_id
