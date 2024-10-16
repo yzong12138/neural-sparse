@@ -2,6 +2,8 @@ import json
 import logging
 import random
 
+from ..utils import is_ddp_enabled
+
 from itertools import chain
 from tqdm import tqdm
 from datasets import load_dataset
@@ -75,12 +77,15 @@ class MiraclCorpusDataset:
 
 
 class DDPDatasetWithRank(Dataset):
-    def __init__(self, inner_dataset, local_rank, world_size):
+    def __init__(self, inner_dataset, local_rank, world_size, drop=False):
         self.inner_dataset = inner_dataset
         number_of_samples = len(self.inner_dataset)
+        if drop:
+            number_of_samples = number_of_samples - number_of_samples%world_size
         self.idxs = [
             i for i in range(number_of_samples) if i % world_size == local_rank
         ]
+        logger.info(f"local index {local_rank}, world size {world_size}, local sample number {len(self.idxs)}")
 
     def __len__(self):
         return len(self.idxs)
@@ -255,16 +260,29 @@ class CombinedRandomSampler(Sampler):
             )
             for dataset in datasets
         ]
+        self.dataset_sequences = None
+        
+    def set_dataset_sequences(self, dataset_sequences = None):
+        if dataset_sequences is None:
+            dataset_sequences = [
+                [i] * len(self.samplers[i]) for i in range(len(self.samplers))
+            ]
+            dataset_sequences = list(chain(*dataset_sequences))
+            if is_ddp_enabled():
+                logger.info("DDP is enabled, set seed to fix dataset sequence iter")
+                random.seed(0)
+                random.shuffle(dataset_sequences)
+                logger.info(dataset_sequences[:10])
+            else:
+                random.shuffle(dataset_sequences)
+        self.dataset_sequences = dataset_sequences
 
     def __iter__(self):
-        dataset_sequences = [
-            [i] * len(self.samplers[i]) for i in range(len(self.samplers))
-        ]
-        dataset_sequences = list(chain(*dataset_sequences))
-        random.shuffle(dataset_sequences)
-
+        if self.dataset_sequences is None:
+            self.set_dataset_sequences()
+            
         iters = [iter(sampler) for sampler in self.samplers]
-        for dataset_idx in dataset_sequences:
+        for dataset_idx in self.dataset_sequences:
             idxs = next(iters[dataset_idx])
             yield [[dataset_idx, idx] for idx in idxs]
 

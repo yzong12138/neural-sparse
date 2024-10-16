@@ -14,6 +14,7 @@ from scripts.data.dataset import (
     MiraclTrainingDataset,
     CombinedDataset,
     CombinedRandomSampler,
+    DDPDatasetWithRank,
 )
 from scripts.data.collator import KnowledgeDistillDataCollator, PosNegsDataCollator
 from scripts.utils import set_logging, get_model
@@ -125,6 +126,15 @@ def main():
                 )
             )
 
+        datasets = [
+            DDPDatasetWithRank(
+                dataset,
+                training_args.local_process_index,
+                training_args.world_size,
+                True if training_args.world_size != 1 else False,
+            )
+            for dataset in datasets
+        ]
         dataset = CombinedDataset(datasets)
         data_collator = PosNegsDataCollator(model.tokenizer, data_args.max_seq_length)
 
