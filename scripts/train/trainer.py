@@ -69,8 +69,8 @@ class SparseModelTrainer(Trainer):
 
     def compute_loss(self, model: SparseModel, inputs, return_outputs=False):
         if hasattr(self, "bi_encoder_teacher"):
-            scores = self.bi_encoder_teacher.get_scores(
-                q_features=inputs["query"], d_features=inputs["docs"]
+            scores = self.bi_encoder_teacher.get_scores_batch(
+                q_features_list=inputs["query"][1:], d_features_list=inputs["docs"][1:]
             )
             inputs["scores"] = scores
 
@@ -78,10 +78,10 @@ class SparseModelTrainer(Trainer):
 
         # we construct this input and model wrapper to make it work for both data parallel and DDP
         model_wrapper_input = {
-            "q_input_ids": inputs["query"]["input_ids"],
-            "q_attention_mask": inputs["query"]["attention_mask"],
-            "input_ids": inputs["docs"]["input_ids"],
-            "attention_mask": inputs["docs"]["attention_mask"],
+            "q_input_ids": inputs["query"][0]["input_ids"],
+            "q_attention_mask": inputs["query"][0]["attention_mask"],
+            "input_ids": inputs["docs"][0]["input_ids"],
+            "attention_mask": inputs["docs"][0]["attention_mask"],
         }
 
         d_rep, q_rep = model(model_wrapper_input)

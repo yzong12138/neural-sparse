@@ -2,6 +2,8 @@ import torch
 import itertools
 import logging
 
+import transformers
+
 logger = logging.getLogger(__name__)
 
 
@@ -42,9 +44,10 @@ class KnowledgeDistillDataCollator:
 
 
 class PosNegsDataCollator:
-    def __init__(self, tokenizer, max_length=512):
+    def __init__(self, tokenizer, max_length=512, teacher_tokenizer_ids=[]):
         self.tokenizer = tokenizer
         self.max_length = max_length
+        self.tokenizers = [self.tokenizer] + [transformers.AutoTokenizer.from_pretrained(tokenizer_id) for tokenizer_id in teacher_tokenizer_ids]
 
     def __call__(self, batch):
         q, pos, negs = zip(*batch)
@@ -53,24 +56,24 @@ class PosNegsDataCollator:
         for p, neg in zip(pos, negs):
             docs.append(p)
             docs = docs + neg
-
-        q = self.tokenizer(
-            list(q),
-            padding=True,
-            truncation=True,
-            max_length=self.max_length,
-            return_tensors="pt",
-            return_token_type_ids=False,
-        )
-        docs = self.tokenizer(
-            docs,
-            padding=True,
-            truncation=True,
-            max_length=self.max_length,
-            return_tensors="pt",
-            return_token_type_ids=False,
-        )
-
-        result = {"query": q, "docs": docs}
-
+        
+        result = {"query":[], "docs":[]}
+            
+        for tokenizer in self.tokenizers:
+            result["query"].append(tokenizer(
+                list(q),
+                padding=True,
+                truncation=True,
+                max_length=self.max_length,
+                return_tensors="pt",
+                return_token_type_ids=False,
+            ))
+            result["docs"].append(tokenizer(
+                docs,
+                padding=True,
+                truncation=True,
+                max_length=self.max_length,
+                return_tensors="pt",
+                return_token_type_ids=False,
+            ))
         return result

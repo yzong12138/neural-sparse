@@ -49,24 +49,64 @@ def main():
     model = get_model(model_args)
     loss_functions = []
 
+    datasets = []
+    for lang in miracl_datasets.split(","):
+        datasets.append(
+            PosNegsDataset(
+                MiraclTrainingDataset(lang),
+                neg_sample_num=data_args.sample_num_one_query,
+            )
+        )
+        logger.info(
+            f"load training data for miracl {lang}. Sample number: {len(datasets[-1])}"
+        )
+
+    for lang in tydi_datasets.split(","):
+        datasets.append(
+            PosNegsDataset(
+                MiraclTrainingDataset(lang, source="castorini/mr-tydi"),
+                neg_sample_num=data_args.sample_num_one_query,
+            )
+        )
+        logger.info(
+            f"load training data for miracl {lang}. Sample number: {len(datasets[-1])}"
+        )
+
+    for corpus in [
+        "eli5_question_answer",
+        "squad_pairs",
+        "NQ-train_pairs",
+        "hotpotqa",
+        "stackexchange_duplicate_questions_title_title",
+        "yahoo_answers_title_answer",
+    ]:
+        dataset = Dataset.load_from_disk((f"mdata/{corpus}"))
+        datasets.append(
+            PosNegsDataset(
+                MiraclTrainingDataset("en", dataset=dataset),
+                neg_sample_num=data_args.sample_num_one_query,
+            )
+        )
+
+    datasets = [
+        DDPDatasetWithRank(
+            dataset,
+            training_args.local_process_index,
+            training_args.world_size,
+            True if training_args.world_size != 1 else False,
+        )
+        for dataset in datasets
+    ]
+    dataset = CombinedDataset(datasets)
+
     if data_args.training_mode.startswith("kd"):
-        if data_args.training_mode.split("-")[-1] == "marco":
-            dataset = MsMarcoKDDataset(
-                score_dic_path=data_args.train_file,
-                sample_num=data_args.sample_num_one_query,
-            )
-            data_collator = KnowledgeDistillDataCollator(
-                model.tokenizer, data_args.max_seq_length
-            )
-        elif data_args.training_mode.split("-")[-1] == "ensemble":
-            with open(data_args.train_file) as f:
-                data = f.readlines()
-            data = [json.loads(line) for line in data]
-            dataset = PosNegsDataset(
-                data, neg_sample_num=data_args.sample_num_one_query
-            )
+        if data_args.training_mode.split("-")[-1] == "ensemble":
             data_collator = PosNegsDataCollator(
-                model.tokenizer, data_args.max_seq_length
+                model.tokenizer,
+                data_args.max_seq_length,
+                teacher_tokenizer_ids=data_args.kd_ensemble_teacher_kwargs.get(
+                    "model_ids", []
+                ),
             )
         else:
             with open(data_args.train_file) as f:
@@ -87,55 +127,6 @@ def main():
         )
 
     elif data_args.training_mode.startswith("infonce"):
-        datasets = []
-        for lang in miracl_datasets.split(","):
-            datasets.append(
-                PosNegsDataset(
-                    MiraclTrainingDataset(lang),
-                    neg_sample_num=data_args.sample_num_one_query,
-                )
-            )
-            logger.info(
-                f"load training data for miracl {lang}. Sample number: {len(datasets[-1])}"
-            )
-
-        for lang in tydi_datasets.split(","):
-            datasets.append(
-                PosNegsDataset(
-                    MiraclTrainingDataset(lang, source="castorini/mr-tydi"),
-                    neg_sample_num=data_args.sample_num_one_query,
-                )
-            )
-            logger.info(
-                f"load training data for miracl {lang}. Sample number: {len(datasets[-1])}"
-            )
-
-        for corpus in [
-            "eli5_question_answer",
-            "squad_pairs",
-            "NQ-train_pairs",
-            "hotpotqa",
-            "stackexchange_duplicate_questions_title_title",
-            "yahoo_answers_title_answer",
-        ]:
-            dataset = Dataset.load_from_disk((f"mdata/{corpus}"))
-            datasets.append(
-                PosNegsDataset(
-                    MiraclTrainingDataset("en", dataset=dataset),
-                    neg_sample_num=data_args.sample_num_one_query,
-                )
-            )
-
-        datasets = [
-            DDPDatasetWithRank(
-                dataset,
-                training_args.local_process_index,
-                training_args.world_size,
-                True if training_args.world_size != 1 else False,
-            )
-            for dataset in datasets
-        ]
-        dataset = CombinedDataset(datasets)
         data_collator = PosNegsDataCollator(model.tokenizer, data_args.max_seq_length)
 
         loss_functions.append(
@@ -144,8 +135,6 @@ def main():
                 use_in_batch_negatives=data_args.use_in_batch_negatives,
             )
         )
-
-        data_collator = PosNegsDataCollator(model.tokenizer, data_args.max_seq_length)
 
     # split to eval
     optimizer = AdamW(
