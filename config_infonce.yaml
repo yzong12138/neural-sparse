@@ -2,9 +2,9 @@ logging_steps: 500
 # log_level_replica: info
 
 inf_free: true
-model_name_or_path: models/uncased-marco-noidf-svd
-tokenizer_name: models/uncased-marco-noidf-svd
-split_batch: 1
+model_name_or_path: models/uncased-marco-noidf
+tokenizer_name: models/uncased-marco-noidf
+split_batch: 2
 
 max_seq_length: 256
 beir_dir: data/beir
@@ -16,7 +16,7 @@ flops_d_lambda: 0.02
 flops_d_T: 10000
 ranking_loss_weight: 1
 
-output_dir: output/svd
+output_dir: output/from_marco_ckpt_ddp2
 per_device_eval_batch_size: 50
 per_device_train_batch_size: 12
 

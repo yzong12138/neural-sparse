@@ -183,4 +183,8 @@ class SparseModelTrainer(Trainer):
             dataloader_params.pop("drop_last")
             dataloader_params["batch_sampler"] = sampler
 
+        if hasattr(train_dataset, "no_prepare") and self.accelerator.num_processes > 1:
+            if train_dataset.no_prepare:
+                logger.info("no accelerator prepare")
+                return DataLoader(train_dataset, **dataloader_params)
         return self.accelerator.prepare(DataLoader(train_dataset, **dataloader_params))

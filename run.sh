@@ -1,9 +1,9 @@
 set -e
 
 N_DEVICES=8
-OUTPUT_DIR="output/multi-idf-uncased-norm"
+OUTPUT_DIR="output/from_marco_ckpt_ddp2"
 
-python train_ir.py config.yaml
+torchrun --nproc_per_node=${N_DEVICES} train_ir.py config_infonce.yaml
 
 for step in {50000,}
 do
@@ -12,6 +12,5 @@ torchrun --nproc_per_node=${N_DEVICES} evaluate_miracl.py \
   --inf_free true \
   --output_dir ${OUTPUT_DIR} \
   --log_level info \
-  --per_device_eval_batch_size 20 \
-  --idf_path multilingual_idf_uncased_norm.json
+  --per_device_eval_batch_size 25
 done

@@ -69,7 +69,7 @@ def main():
             )
         )
         logger.info(
-            f"load training data for miracl {lang}. Sample number: {len(datasets[-1])}"
+            f"load training data for tydi {lang}. Sample number: {len(datasets[-1])}"
         )
 
     for corpus in [
@@ -93,7 +93,8 @@ def main():
             dataset,
             training_args.local_process_index,
             training_args.world_size,
-            True if training_args.world_size != 1 else False,
+            drop=True if training_args.world_size != 1 else False,
+            shuffle=True if training_args.world_size != 1 else False,
         )
         for dataset in datasets
     ]

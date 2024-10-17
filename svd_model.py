@@ -11,31 +11,36 @@ def svd(model, K=256):
     U_k = U[:, :K]
     S_k = torch.diag(S[:K])
     Vh_k = Vh[:K, :]
-    reduced_decoder_weight_1 = torch.matmul(U_k, S_k)
-    reduced_decoder_weight_2 = Vh_k
-    bias = model.cls.predictions.decoder.bias
+    reduced_decoder_weight_1 = torch.matmul(U_k, S_k)  # 105879 x K
+    reduced_decoder_weight_2 = Vh_k  # K x 768
+    bias = model.cls.predictions.bias
 
-    model.cls.predictions.decoder = torch.nn.Sequential(
-        torch.nn.Linear(
-            reduced_decoder_weight_2.size(1),
-            reduced_decoder_weight_2.size(0),
-            bias=False,
-        ),
-        torch.nn.Linear(
-            reduced_decoder_weight_1.size(1),
-            reduced_decoder_weight_1.size(0),
-            bias=True,
-        ),
+    model.cls.predictions.word_embeddings_projection = torch.nn.Linear(
+        K, model.config.hidden_size, bias=False
+    )
+    model.cls.predictions.decoder = torch.nn.Linear(
+        K, model.config.vocab_size, bias=False
     )
 
-    model.cls.predictions.decoder[0].weight = torch.nn.Parameter(
-        reduced_decoder_weight_2
+    model.cls.predictions.decoder.weight = torch.nn.Parameter(reduced_decoder_weight_1)
+    model.cls.predictions.word_embeddings_projection.weight = torch.nn.Parameter(
+        reduced_decoder_weight_2.T
     )
-    model.cls.predictions.decoder[1].weight = torch.nn.Parameter(
+    model.cls.predictions.decoder.bias = bias
+
+    model.bert.embeddings.word_embeddings = torch.nn.Embedding(
+        model.config.vocab_size, K, padding_idx=model.config.pad_token_id
+    )
+    model.bert.embeddings.word_embeddings_projection = torch.nn.Linear(
+        K, model.config.hidden_size, bias=False
+    )
+
+    model.bert.embeddings.word_embeddings.weight = torch.nn.Parameter(
         reduced_decoder_weight_1
     )
-    model.cls.predictions.decoder[1].bias = bias
-    model.cls.predictions.decoder.bias = bias
+    model.bert.embeddings.word_embeddings_projection.weight = torch.nn.Parameter(
+        reduced_decoder_weight_2.T
+    )
     return model
 
 
@@ -53,7 +58,7 @@ config = DecompBertConfig.from_pretrained(
 )
 model_svd = DecompBertForMaskedLM(config)
 model_svd.load_state_dict(model.state_dict())
-model_svd.save_pretrained(args.output_dir, safe_serialization=False)
+model_svd.save_pretrained(args.output_dir)
 
 tokenizer = transformers.AutoTokenizer.from_pretrained(args.model_id)
 tokenizer.save_pretrained(args.output_dir)

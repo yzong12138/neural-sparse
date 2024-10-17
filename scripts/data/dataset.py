@@ -77,7 +77,7 @@ class MiraclCorpusDataset:
 
 
 class DDPDatasetWithRank(Dataset):
-    def __init__(self, inner_dataset, local_rank, world_size, drop=False):
+    def __init__(self, inner_dataset, local_rank, world_size, drop=False, shuffle=False):
         self.inner_dataset = inner_dataset
         number_of_samples = len(self.inner_dataset)
         if drop:
@@ -85,6 +85,11 @@ class DDPDatasetWithRank(Dataset):
         self.idxs = [
             i for i in range(number_of_samples) if i % world_size == local_rank
         ]
+        if shuffle:
+            state = random.getstate()
+            random.seed(local_rank)
+            random.shuffle(self.idxs)
+            random.setstate(state)
         logger.info(f"local index {local_rank}, world size {world_size}, local sample number {len(self.idxs)}")
 
     def __len__(self):
@@ -270,8 +275,12 @@ class CombinedRandomSampler(Sampler):
             dataset_sequences = list(chain(*dataset_sequences))
             if is_ddp_enabled():
                 logger.info("DDP is enabled, set seed to fix dataset sequence iter")
+
+                state = random.getstate()
                 random.seed(0)
                 random.shuffle(dataset_sequences)
+                random.setstate(state)
+                
                 logger.info(dataset_sequences[:10])
             else:
                 random.shuffle(dataset_sequences)
@@ -294,6 +303,7 @@ class CombinedDataset(Dataset):
     def __init__(self, datasets):
         self.datasets = datasets
         self.length = sum(map(len, self.datasets))
+        self.no_prepare = True
 
     def __len__(self):
         return self.length
