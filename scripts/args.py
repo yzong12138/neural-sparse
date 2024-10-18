@@ -51,6 +51,12 @@ class ModelArguments:
         return
 
 
+@dataclass
+class MiningArguments:
+    mine_datasets: str = field(default=None)
+    source: str = field(default=None)
+
+
 def parse_args():
     parser = HfArgumentParser(
         (ModelArguments, DataTrainingArguments, TrainingArguments)
