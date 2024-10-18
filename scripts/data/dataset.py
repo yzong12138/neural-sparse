@@ -56,7 +56,7 @@ class BEIRCorpusDataset(KeyValueDataset):
         super().__init__(combined_corpus)
 
 
-class MiraclCorpusDataset:
+class MiraclCorpusDataset(Dataset):
     def __init__(self, corpus):
         """
         Args:
