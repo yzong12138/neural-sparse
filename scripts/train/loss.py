@@ -1,7 +1,5 @@
 import torch
 
-from ..utils import gather_rep
-
 
 class SparseTrainingLoss:
     def __init__(self, weight=1):
@@ -34,7 +32,6 @@ class KLDivLoss(SparseTrainingLoss):
                 d_rep, q_rep.reshape(batch_size, -1, 1)
             ).squeeze()
         else:
-            d_rep = gather_rep(d_rep, accelerator)
             student_scores = torch.matmul(q_rep, d_rep.t())
 
         student_scores = torch.log_softmax(student_scores, dim=1)
@@ -61,7 +58,6 @@ class InfoNCELoss(SparseTrainingLoss):
         mask[indices] = False
         neg_rep = d_rep[mask]
         if self.use_in_batch_negatives:
-            neg_rep = gather_rep(neg_rep, accelerator)
             scores_neg = torch.matmul(q_rep, neg_rep.t())
         else:
             neg_rep = neg_rep.reshape(bs, -1, neg_rep.shape[-1])

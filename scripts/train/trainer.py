@@ -48,18 +48,10 @@ class SparseModelTrainer(Trainer):
         super().__init__(**kwargs)
 
     def flops_value(self, representation, group_num=1):
-        # representation size: batch_size * vocab_dim
-        # if ddp: all_representation size: n * batch_size * vocab_dim
-        # we need to take the representations from other devices into calculation
-        # but detach their grad. We only consider the grad for representation at local device
-        # note representation is one element of all_representations
+        # representation size: (ndevice * batch_size) * vocab_dim
         # group num: how many semantic similar documents representations in one batch
-        representation = gather_rep(representation, accelerator=self.accelerator)
         representation = representation.reshape(-1, group_num, representation.shape[-1])
-        return (
-            torch.sum(torch.mean(torch.abs(representation), dim=0) ** 2)
-            * self.accelerator.num_processes
-        )
+        return torch.sum(torch.mean(torch.abs(representation), dim=0) ** 2)
 
     def get_lambda(self, lambda_value, lambda_T):
         if self.state.global_step >= lambda_T:
@@ -85,6 +77,8 @@ class SparseModelTrainer(Trainer):
         }
 
         d_rep, q_rep = model(model_wrapper_input)
+        d_rep = gather_rep(d_rep, self.accelerator)
+        q_rep = gather_rep(q_rep, self.accelerator)
         d_flops = self.flops_value(d_rep, d_rep.shape[0] // q_rep.shape[0])
         flops_loss += d_flops * self.get_lambda(
             self.data_args.flops_d_lambda, self.data_args.flops_d_T
@@ -114,6 +108,9 @@ class SparseModelTrainer(Trainer):
             logger.info(
                 f"ranking loss moving avg:{self.ranking_loss_moving_avg}, d_flops: {d_flops}, flops_loss: {flops_loss} avg doc length: {(d_rep>0).sum()/d_rep.shape[0]}"
             )
+        # DP reduce grad by sum, while DDP reduce grad by mean
+        # scale the loss to fix the gap
+        loss = loss * self.accelerator.num_processes
 
         return (loss, outputs) if return_outputs else loss
 
