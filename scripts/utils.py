@@ -63,7 +63,10 @@ def get_model(model_args):
             idf = json.load(f)
 
     model = SparseModel(
-        model_args.model_name_or_path, idf=idf, tokenizer_id=model_args.tokenizer_name
+        model_args.model_name_or_path,
+        idf=idf,
+        tokenizer_id=model_args.tokenizer_name,
+        resize_vocab=model_args.vocab_resize,
     )
 
     return model

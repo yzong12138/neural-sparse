@@ -41,7 +41,7 @@ class SparseModelTrainer(Trainer):
         self.data_args = data_args
         self.loss_functions = loss_functions
         self.ranking_loss_moving_avg = 0
-        kwargs["model"] = ModelWrapper(kwargs["model"])
+        kwargs["model"] = ModelWrapper(kwargs["model"], model_args.inf_free)
         super().__init__(**kwargs)
 
     def flops_value(self, representation, group_num=1):

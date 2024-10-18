@@ -46,6 +46,11 @@ def main():
 
     if data_args.training_mode.startswith("kd"):
         if data_args.training_mode.split("-")[-1] == "marco":
+            # with open(data_args.train_file) as f:
+            #     data = json.load(f)
+            # dataset = KnowledgeDistillDataset(
+            #     data, sample_num=data_args.sample_num_one_query
+            # )
             dataset = MsMarcoKDDataset(
                 score_dic_path=data_args.train_file,
                 sample_num=data_args.sample_num_one_query,

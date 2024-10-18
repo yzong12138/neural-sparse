@@ -3,16 +3,27 @@ import transformers
 import itertools
 import logging
 
+from .resize_vocab import ResizeBertConfig, ResizeBertForMaskedLM
+from transformers import AutoModelForMaskedLM, BertForMaskedLM, AutoConfig
+
 logger = logging.getLogger(__name__)
 
 
 class SparseModel(torch.nn.Module):
-    def __init__(self, model_id, idf=None, tokenizer_id=None):
+    def __init__(self, model_id, idf=None, tokenizer_id=None, resize_vocab=None):
         super().__init__()
 
+        if resize_vocab is not None:
+            config = ResizeBertConfig.from_pretrained(model_id)
+            config.vocab_resize = resize_vocab
+            self.backbone = ResizeBertForMaskedLM.from_pretrained(
+                model_id, config=config
+            )
+        else:
+            self.backbone = transformers.AutoModelForMaskedLM.from_pretrained(model_id)
         if tokenizer_id is None:
             tokenizer_id = model_id
-        self.backbone = transformers.AutoModelForMaskedLM.from_pretrained(model_id)
+
         self.tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_id)
         self.special_token_ids = [
             self.tokenizer.vocab[token]
@@ -58,7 +69,7 @@ class SparseModel(torch.nn.Module):
 class SparsePostProcessor(object):
     def __init__(self, tokenizer):
         self.tokenizer = tokenizer
-        self.id_to_token = ["" for i in range(tokenizer.vocab_size)]
+        self.id_to_token = [f"id-{i}" for i in range(100000)]
         for token, _id in tokenizer.vocab.items():
             self.id_to_token[_id] = token
 

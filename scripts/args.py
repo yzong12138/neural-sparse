@@ -37,6 +37,7 @@ class ModelArguments:
     model_name_or_path: str = field(default=None)
     tokenizer_name: Optional[str] = field(default=None)
     idf_path: Optional[str] = field(default=None)
+    vocab_resize: Optional[int] = field(default=None)
 
     def __post_init__(self):
         if self.tokenizer_name is None:
