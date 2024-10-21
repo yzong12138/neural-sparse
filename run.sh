@@ -1,7 +1,7 @@
 set -e
 
 N_DEVICES=8
-OUTPUT_DIR="output/baselines/bi"
+OUTPUT_DIR="output/baselines/bi-resize-10000"
 
 torchrun --nproc_per_node=${N_DEVICES} train_ir.py config_marco.yaml
 
@@ -12,5 +12,6 @@ torchrun --nproc_per_node=${N_DEVICES} evaluate_beir.py \
   --inf_free false \
   --output_dir ${OUTPUT_DIR} \
   --log_level info \
-  --per_device_eval_batch_size 50
+  --per_device_eval_batch_size 50 \
+  --vocab_resize 10000
 done

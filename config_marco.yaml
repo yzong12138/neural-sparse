@@ -4,7 +4,7 @@ logging_steps: 500
 inf_free: false
 model_name_or_path: distilbert/distilbert-base-uncased
 tokenizer_name: distilbert/distilbert-base-uncased
-# vocab_resize: 1000
+vocab_resize: 10000
 
 max_seq_length: 256
 beir_dir: data/beir
@@ -13,13 +13,13 @@ train_file: data/msmarco_mixed_scores_v3.json
 # train_file: data/toy_kd.json
 sample_num_one_query: 2
 use_in_batch_negatives: false
-flops_d_lambda: 0.0005
+flops_d_lambda: 0.003
 flops_d_T: 10000
-flops_q_lambda: 0.0006
+flops_q_lambda: 0.003
 flops_q_T: 10000
 ranking_loss_weight: 1
 
-output_dir: output/baselines/bi
+output_dir: output/baselines/bi-resize-10000
 per_device_eval_batch_size: 50
 per_device_train_batch_size: 30
 

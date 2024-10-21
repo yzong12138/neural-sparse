@@ -118,6 +118,7 @@ def main():
                     index_name=dataset,
                     max_length=data_args.max_seq_length,
                     batch_size=training_args.per_device_eval_batch_size,
+                    inf_free=model_args.inf_free
                 )
             )
 
