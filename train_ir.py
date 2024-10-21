@@ -6,7 +6,7 @@ import sys
 from dataclasses import asdict
 
 from scripts.train.trainer import SparseModelTrainer
-from scripts.train.loss import KLDivLoss, InfoNCELoss
+from scripts.train.loss import KLDivLoss, InfoNCELoss, MarginMSELoss
 from scripts.data.dataset import (
     KnowledgeDistillDataset,
     MsMarcoKDDataset,
@@ -74,12 +74,14 @@ def main():
                 model.tokenizer, data_args.max_seq_length
             )
 
-        loss_functions.append(
-            KLDivLoss(
-                use_in_batch_negatives=data_args.use_in_batch_negatives,
-                weight=data_args.ranking_loss_weight,
+        for loss_type in data_args.kl_div_loss:
+            loss_cls = KLDivLoss if loss_type == "kldiv" else MarginMSELoss
+            loss_functions.append(
+                loss_cls(
+                    use_in_batch_negatives=data_args.use_in_batch_negatives,
+                    weight=data_args.ranking_loss_weight,
+                )
             )
-        )
 
     elif data_args.training_mode.startswith("infonce"):
         with open(data_args.train_file) as f:

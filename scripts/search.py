@@ -18,6 +18,7 @@ async def search(
     max_length: int = 512,
     batch_size: int = 50,
     result_size: int = 15,
+    inf_free: bool = True,
 ):
     os.makedirs(out_dir, exist_ok=True)
 
@@ -32,7 +33,7 @@ async def search(
 
     run_res = dict()
     for ids, texts in tqdm(dataloader):
-        queries_encoded = query_encoder.encode(texts, inf_free=True)
+        queries_encoded = query_encoder.encode(texts, inf_free=inf_free)
 
         search_results = await batch_search(
             queries=queries_encoded,
