@@ -49,7 +49,7 @@ def main():
     args = parser.parse_args()
     print(args)
 
-    datasets = args.datasets
+    datasets = args.datasets.split(",")
     source = args.source
     max_length = args.max_length
     model_id = args.model_id
@@ -62,7 +62,9 @@ def main():
     model = accelerator.prepare(model)
     accelerator.wait_for_everyone()
     for dataset in datasets:
-        samples = Dataset.load_from_disk(f"mdata/raw/{source}/{dataset}")
+        path = f"mdata/raw/{source}/{dataset}"
+        print(path)
+        samples = Dataset.load_from_disk(path)
         corpus = get_corpus(source, dataset)
         ddp_dataset = DDPDatasetWithRank(
             ScorerDataset(corpus, samples),
@@ -70,7 +72,7 @@ def main():
             accelerator.num_processes,
         )
 
-        output_dir = f"mdata/scores/{model_id.split('/')[-1]}/{args.dataset}/"
+        output_dir = f"mdata/scores/{model_id.split('/')[-1]}/{dataset}/"
         os.makedirs(output_dir, exist_ok=True)
         with open(
             os.path.join(output_dir, f"{accelerator.local_process_index}.pkl"), "wb"

@@ -19,10 +19,10 @@ do
 torchrun --nproc_per_node=8 scorer_multilingual.py \
   --model_id BAAI/bge-m3 \
   --source miracl \
-  --datasets bn,te,es,fr,id,hi,ru,ar,zh,fa,ja,fi,sw,ko,en
+  --datasets 'bn,te,es,fr,id,hi,ru,ar,zh,fa,ja,fi,sw,ko,en'
 
 torchrun --nproc_per_node=8 scorer_multilingual.py \
   --model_id BAAI/bge-m3 \
   --source tydi \
-  --datasets arabic,bengali,english,finnish,indonesian,japanese,korean,russian,swahili,telugu
+  --datasets 'arabic,bengali,english,finnish,indonesian,japanese,korean,russian,swahili,telugu'
 done
