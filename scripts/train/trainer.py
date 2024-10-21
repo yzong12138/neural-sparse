@@ -44,13 +44,15 @@ class SparseModelTrainer(Trainer):
         self.data_args = data_args
         self.loss_functions = loss_functions
         self.ranking_loss_moving_avg = 0
-        kwargs["model"] = ModelWrapper(kwargs["model"])
+        kwargs["model"] = ModelWrapper(kwargs["model"], model_args.inf_free)
         super().__init__(**kwargs)
 
     def flops_value(self, representation, group_num=1):
         # representation size: (ndevice * batch_size) * vocab_dim
+        # representation size: (ndevice * batch_size) * vocab_dim
         # group num: how many semantic similar documents representations in one batch
         representation = representation.reshape(-1, group_num, representation.shape[-1])
+        return torch.sum(torch.mean(torch.abs(representation), dim=0) ** 2)
         return torch.sum(torch.mean(torch.abs(representation), dim=0) ** 2)
 
     def get_lambda(self, lambda_value, lambda_T):
@@ -79,6 +81,8 @@ class SparseModelTrainer(Trainer):
         d_rep, q_rep = model(model_wrapper_input)
         d_rep = gather_rep(d_rep, self.accelerator)
         q_rep = gather_rep(q_rep, self.accelerator)
+        if "scores" in inputs:
+            inputs["scores"] = gather_rep(inputs["scores"], self.accelerator)
         d_flops = self.flops_value(d_rep, d_rep.shape[0] // q_rep.shape[0])
         flops_loss += d_flops * self.get_lambda(
             self.data_args.flops_d_lambda, self.data_args.flops_d_T
@@ -92,7 +96,7 @@ class SparseModelTrainer(Trainer):
         ranking_loss = 0
         for loss_function in self.loss_functions:
             ranking_loss += loss_function.get_loss(
-                q_rep=q_rep, d_rep=d_rep, inputs=inputs, accelerator=self.accelerator
+                q_rep=q_rep, d_rep=d_rep, inputs=inputs
             )
         self.ranking_loss_moving_avg = (
             0.01 * ranking_loss.item() + 0.99 * self.ranking_loss_moving_avg
@@ -108,6 +112,9 @@ class SparseModelTrainer(Trainer):
             logger.info(
                 f"ranking loss moving avg:{self.ranking_loss_moving_avg}, d_flops: {d_flops}, flops_loss: {flops_loss} avg doc length: {(d_rep>0).sum()/d_rep.shape[0]}"
             )
+        # DP reduce grad by sum, while DDP reduce grad by mean
+        # scale the loss to fix the gap
+        loss = loss * self.accelerator.num_processes
         # DP reduce grad by sum, while DDP reduce grad by mean
         # scale the loss to fix the gap
         loss = loss * self.accelerator.num_processes

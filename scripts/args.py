@@ -2,7 +2,7 @@ import sys
 import os
 
 from dataclasses import dataclass, field
-from typing import Optional, Union
+from typing import Optional, Union, List
 from transformers import HfArgumentParser, TrainingArguments
 
 beir_datasets = "trec-covid,nfcorpus,nq,hotpotqa,fiqa,arguana,webis-touche2020,dbpedia-entity,scidocs,fever,climate-fever,scifact,quora"
@@ -32,6 +32,7 @@ class DataTrainingArguments:
     kd_ensemble_teacher_kwargs: Optional[Union[dict, str]] = field(
         default_factory=dict,
     )
+    kl_div_loss: List[str] = field(default_factory=lambda: ["kldiv"])
 
     def __post_init__(self):
         return

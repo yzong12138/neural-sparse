@@ -12,10 +12,12 @@ from opensearchpy import OpenSearch
 from .model.sparse_encoders import SparseModel
 
 
-def gather_rep(rep, accelerator):
+def gather_rep(rep, accelerator, local_at_first=True):
     if accelerator.num_processes == 1:
         return rep
     all_rep = accelerator.gather(rep)
+    if not local_at_first:
+        return all_rep
     size = rep.shape[0]
     local_index = accelerator.local_process_index
     reo_others = (
