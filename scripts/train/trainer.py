@@ -49,10 +49,8 @@ class SparseModelTrainer(Trainer):
 
     def flops_value(self, representation, group_num=1):
         # representation size: (ndevice * batch_size) * vocab_dim
-        # representation size: (ndevice * batch_size) * vocab_dim
         # group num: how many semantic similar documents representations in one batch
         representation = representation.reshape(-1, group_num, representation.shape[-1])
-        return torch.sum(torch.mean(torch.abs(representation), dim=0) ** 2)
         return torch.sum(torch.mean(torch.abs(representation), dim=0) ** 2)
 
     def get_lambda(self, lambda_value, lambda_T):
@@ -112,9 +110,6 @@ class SparseModelTrainer(Trainer):
             logger.info(
                 f"ranking loss moving avg:{self.ranking_loss_moving_avg}, d_flops: {d_flops}, flops_loss: {flops_loss} avg doc length: {(d_rep>0).sum()/d_rep.shape[0]}"
             )
-        # DP reduce grad by sum, while DDP reduce grad by mean
-        # scale the loss to fix the gap
-        loss = loss * self.accelerator.num_processes
         # DP reduce grad by sum, while DDP reduce grad by mean
         # scale the loss to fix the gap
         loss = loss * self.accelerator.num_processes
