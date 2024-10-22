@@ -5,7 +5,7 @@ import torch
 import transformers
 
 from scripts.data.dataset import DDPDatasetWithRank, MiraclCorpusDataset
-from scripts.data.data_utils import get_corpus, get_queries
+from scripts.data.data_utils import get_corpus_id_to_text, get_queries
 from scripts.train.bi_encoder_wrapper import BiEncoderWrapper
 
 from accelerate import Accelerator
@@ -15,13 +15,10 @@ from tqdm import tqdm
 
 
 class ScorerDataset(torch.utils.data.Dataset):
-    def __init__(self, corpus, samples):
-        assert isinstance(corpus, Dataset)
+    def __init__(self, corpus_id_to_text, samples):
+        assert isinstance(corpus_id_to_text, dict)
         assert isinstance(samples, Dataset)
-        id_to_text = {}
-        for data in tqdm(corpus):
-            id_to_text[data["docid"]] = data["title"] + " " + data["text"]
-        self.corpus = id_to_text
+        self.corpus = corpus_id_to_text
         self.samples = samples
 
     def __len__(self):
@@ -65,7 +62,7 @@ def main():
         path = f"mdata/raw/{source}/{dataset}"
         print(path)
         samples = Dataset.load_from_disk(path)
-        corpus = get_corpus(source, dataset)
+        corpus = get_corpus_id_to_text(source, dataset)
         ddp_dataset = DDPDatasetWithRank(
             ScorerDataset(corpus, samples),
             accelerator.local_process_index,

@@ -1,12 +1,14 @@
+import os
 import json
 import logging
 import random
 
 from ..utils import is_ddp_enabled
+from .data_utils import get_corpus_id_to_text
 
 from itertools import chain
 from tqdm import tqdm
-from datasets import load_dataset
+from datasets import load_dataset, Dataset as DatasetsDataset
 from beir import util
 from beir.datasets.data_loader import GenericDataLoader
 from torch.utils.data import Dataset
@@ -77,11 +79,13 @@ class MiraclCorpusDataset(Dataset):
 
 
 class DDPDatasetWithRank(Dataset):
-    def __init__(self, inner_dataset, local_rank, world_size, drop=False, shuffle=False):
+    def __init__(
+        self, inner_dataset, local_rank, world_size, drop=False, shuffle=False
+    ):
         self.inner_dataset = inner_dataset
         number_of_samples = len(self.inner_dataset)
         if drop:
-            number_of_samples = number_of_samples - number_of_samples%world_size
+            number_of_samples = number_of_samples - number_of_samples % world_size
         self.idxs = [
             i for i in range(number_of_samples) if i % world_size == local_rank
         ]
@@ -90,7 +94,9 @@ class DDPDatasetWithRank(Dataset):
             random.seed(local_rank)
             random.shuffle(self.idxs)
             random.setstate(state)
-        logger.info(f"local index {local_rank}, world size {world_size}, local sample number {len(self.idxs)}")
+        logger.info(
+            f"local index {local_rank}, world size {world_size}, local sample number {len(self.idxs)}"
+        )
 
     def __len__(self):
         return len(self.idxs)
@@ -110,11 +116,16 @@ class KnowledgeDistillDataset(Dataset):
         logger.info(f"KnowledgeDistillDataset input data number: {len(all_data)}")
         assert sample_num >= 2
 
+        has_scores = "scores" in all_data[0]
+
         for data in all_data:
             query = data["query"]
             texts = data["docs"]
-            scores = data["scores"]
-            assert len(texts) == len(scores)
+            if has_scores:
+                scores = data["scores"]
+                assert len(texts) == len(scores)
+            else:
+                scores = [None] * len(texts)
 
             if shuffle:
                 idxs = list(range(len(scores)))
@@ -255,6 +266,24 @@ class MiraclTrainingDataset(Dataset):
         }
 
 
+class MiraclTrainingDatasetDisk(Dataset):
+    def __init__(self, lang="en", source="miracl", root_dir="mdata/raw"):
+        miracl = DatasetsDataset.load_from_disk(os.path.join(root_dir, source, lang))
+        corpus = get_corpus_id_to_text(source, lang)
+        self.data = []
+        for data in tqdm(miracl):
+            self.data.append(
+                {"query": data["query"], "docs": [corpus[hit] for hit in data["hits"]]}
+            )
+        del corpus
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        return self.data[idx]
+
+
 class CombinedRandomSampler(Sampler):
     def __init__(self, datasets, batch_size, drop_last=True):
         self.datasets = datasets
@@ -266,8 +295,8 @@ class CombinedRandomSampler(Sampler):
             for dataset in datasets
         ]
         self.dataset_sequences = None
-        
-    def set_dataset_sequences(self, dataset_sequences = None):
+
+    def set_dataset_sequences(self, dataset_sequences=None):
         if dataset_sequences is None:
             dataset_sequences = [
                 [i] * len(self.samplers[i]) for i in range(len(self.samplers))
@@ -280,7 +309,7 @@ class CombinedRandomSampler(Sampler):
                 random.seed(0)
                 random.shuffle(dataset_sequences)
                 random.setstate(state)
-                
+
                 logger.info(dataset_sequences[:10])
             else:
                 random.shuffle(dataset_sequences)
@@ -289,7 +318,7 @@ class CombinedRandomSampler(Sampler):
     def __iter__(self):
         if self.dataset_sequences is None:
             self.set_dataset_sequences()
-            
+
         iters = [iter(sampler) for sampler in self.samplers]
         for dataset_idx in self.dataset_sequences:
             idxs = next(iters[dataset_idx])
@@ -311,3 +340,31 @@ class CombinedDataset(Dataset):
     def __getitem__(self, idx):
         dataset_idx, data_idx = idx
         return self.datasets[dataset_idx][data_idx]
+
+
+def get_miracl_dataset(source, lang, sample_num_one_query=2, from_disk=False):
+    assert source in ["miracl", "tydi"]
+    if from_disk:
+        return KnowledgeDistillDataset(
+            MiraclTrainingDatasetDisk(lang, source),
+            sample_num=sample_num_one_query,
+            shuffle=False,
+        )
+    else:
+        return PosNegsDataset(
+            MiraclTrainingDataset(lang),
+            neg_sample_num=sample_num_one_query,
+        )
+
+
+def get_miracl_datasets(source, datasets_str, sample_num_one_query=2, from_disk=False):
+    assert source in ["miracl", "tydi"]
+    datasets = []
+    for dataset in datasets_str.split(","):
+        datasets.append(
+            get_miracl_dataset(source, dataset, sample_num_one_query, from_disk)
+        )
+        logger.info(
+            f"load training data for {source} {dataset}. Sample number: {len(datasets[-1])}"
+        )
+    return datasets

@@ -15,6 +15,7 @@ from scripts.data.dataset import (
     CombinedDataset,
     CombinedRandomSampler,
     DDPDatasetWithRank,
+    get_miracl_datasets,
 )
 from scripts.data.collator import KnowledgeDistillDataCollator, PosNegsDataCollator
 from scripts.utils import set_logging, get_model
@@ -50,43 +51,18 @@ def main():
     loss_functions = []
 
     datasets = []
-    for lang in miracl_datasets.split(","):
-        datasets.append(
-            PosNegsDataset(
-                MiraclTrainingDataset(lang),
-                neg_sample_num=data_args.sample_num_one_query,
-            )
-        )
-        logger.info(
-            f"load training data for miracl {lang}. Sample number: {len(datasets[-1])}"
-        )
-
-    for lang in tydi_datasets.split(","):
-        datasets.append(
-            PosNegsDataset(
-                MiraclTrainingDataset(lang, source="castorini/mr-tydi"),
-                neg_sample_num=data_args.sample_num_one_query,
-            )
-        )
-        logger.info(
-            f"load training data for tydi {lang}. Sample number: {len(datasets[-1])}"
-        )
-
-    for corpus in [
-        "eli5_question_answer",
-        "squad_pairs",
-        "NQ-train_pairs",
-        "hotpotqa",
-        "stackexchange_duplicate_questions_title_title",
-        "yahoo_answers_title_answer",
-    ]:
-        dataset = Dataset.load_from_disk((f"mdata/{corpus}"))
-        datasets.append(
-            PosNegsDataset(
-                MiraclTrainingDataset("en", dataset=dataset),
-                neg_sample_num=data_args.sample_num_one_query,
-            )
-        )
+    datasets = datasets + get_miracl_datasets(
+        "miracl",
+        miracl_datasets,
+        data_args.sample_num_one_query,
+        data_args.miracl_from_disk,
+    )
+    datasets = datasets + get_miracl_datasets(
+        "tydi",
+        tydi_datasets,
+        data_args.sample_num_one_query,
+        data_args.miracl_from_disk,
+    )
 
     datasets = [
         DDPDatasetWithRank(
@@ -102,13 +78,23 @@ def main():
 
     if data_args.training_mode.startswith("kd"):
         if data_args.training_mode.split("-")[-1] == "ensemble":
-            data_collator = PosNegsDataCollator(
-                model.tokenizer,
-                data_args.max_seq_length,
-                teacher_tokenizer_ids=data_args.kd_ensemble_teacher_kwargs.get(
-                    "model_ids", []
-                ),
-            )
+            if data_args.miracl_from_disk:
+                logger.info("knowledge distill data collator")
+                data_collator = KnowledgeDistillDataCollator(
+                    model.tokenizer,
+                    data_args.max_seq_length,
+                    teacher_tokenizer_ids=data_args.kd_ensemble_teacher_kwargs.get(
+                        "model_ids", []
+                    ),
+                )
+            else:
+                data_collator = PosNegsDataCollator(
+                    model.tokenizer,
+                    data_args.max_seq_length,
+                    teacher_tokenizer_ids=data_args.kd_ensemble_teacher_kwargs.get(
+                        "model_ids", []
+                    ),
+                )
         else:
             with open(data_args.train_file) as f:
                 data = f.readlines()
@@ -122,6 +108,7 @@ def main():
 
         for loss_type in data_args.kl_div_loss:
             loss_cls = KLDivLoss if loss_type == "kldiv" else MarginMSELoss
+            logger.info(loss_cls)
             loss_functions.append(
                 loss_cls(
                     use_in_batch_negatives=data_args.use_in_batch_negatives,
