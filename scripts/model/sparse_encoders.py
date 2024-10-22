@@ -101,7 +101,9 @@ class SparseEncoder:
 
     def reset_count(self):
         try:
-            self.count_tensor = torch.zeros(self.model.backbone.config.vocab_resize).to(self.device)
+            self.count_tensor = torch.zeros(self.model.backbone.config.vocab_resize).to(
+                self.device
+            )
             print("resize encoder ", self.model.backbone.config.vocab_resize)
         except:
             self.count_tensor = torch.zeros(self.tokenizer.vocab_size).to(self.device)
