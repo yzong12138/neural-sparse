@@ -8,7 +8,7 @@ echo $N_DEVICES $OUTPUT_DIR $MAX_STEPS
 
 torchrun --nproc_per_node=${N_DEVICES} train_ir.py $CONFIG_PATH
 
-for step in {50000,}
+for step in {$MAX_STEPS,}
 do
 torchrun --nproc_per_node=${N_DEVICES} evaluate_miracl.py \
   --model_name_or_path ${OUTPUT_DIR}/checkpoint-${step} \

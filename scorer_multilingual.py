@@ -69,7 +69,7 @@ def main():
             accelerator.num_processes,
         )
 
-        output_dir = f"mdata/scores/{model_id.split('/')[-1]}/{dataset}/"
+        output_dir = f"mdata/scores/{model_id.split('/')[-1]}/{source}/{dataset}/"
         os.makedirs(output_dir, exist_ok=True)
         with open(
             os.path.join(output_dir, f"{accelerator.local_process_index}.pkl"), "wb"

@@ -17,12 +17,12 @@ set -e
 for model_id in {'BAAI/bge-m3','Alibaba-NLP/gte-multilingual-base','intfloat/multilingual-e5-large'}
 do
 torchrun --nproc_per_node=8 scorer_multilingual.py \
-  --model_id BAAI/bge-m3 \
+  --model_id $model_id \
   --source miracl \
   --datasets 'bn,te,es,fr,id,hi,ru,ar,zh,fa,ja,fi,sw,ko,en'
 
 torchrun --nproc_per_node=8 scorer_multilingual.py \
-  --model_id BAAI/bge-m3 \
+  --model_id $model_id \
   --source tydi \
   --datasets 'arabic,bengali,english,finnish,indonesian,japanese,korean,russian,swahili,telugu'
 done
