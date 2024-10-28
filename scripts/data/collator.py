@@ -21,7 +21,7 @@ class KnowledgeDistillDataCollator:
     def __call__(self, batch):
         q, docs, scores = zip(*batch)
 
-        has_scores = list(scores)[0] is None
+        has_scores = list(scores)[0] is not None
         assert len(docs) == len(scores)
         docs = list(itertools.chain(*docs))
 

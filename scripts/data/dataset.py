@@ -344,17 +344,23 @@ class CombinedDataset(Dataset):
 
 def get_miracl_dataset(source, lang, sample_num_one_query=2, from_disk=False):
     assert source in ["miracl", "tydi"]
-    if from_disk:
-        return KnowledgeDistillDataset(
-            MiraclTrainingDatasetDisk(lang, source),
-            sample_num=sample_num_one_query,
-            shuffle=False,
-        )
-    else:
-        return PosNegsDataset(
-            MiraclTrainingDataset(lang),
-            neg_sample_num=sample_num_one_query,
-        )
+    logger.info("load from kd")
+    return KnowledgeDistillDataset(
+        DatasetsDataset.load_from_disk(f"mdata/kd/{source}-{lang}"),
+        sample_num=sample_num_one_query,
+        shuffle=False,
+    )
+    # if from_disk:
+    #     return KnowledgeDistillDataset(
+    #         MiraclTrainingDatasetDisk(lang, source),
+    #         sample_num=sample_num_one_query,
+    #         shuffle=False,
+    #     )
+    # else:
+    #     return PosNegsDataset(
+    #         MiraclTrainingDataset(lang),
+    #         neg_sample_num=sample_num_one_query,
+    #     )
 
 
 def get_miracl_datasets(source, datasets_str, sample_num_one_query=2, from_disk=False):

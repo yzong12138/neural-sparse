@@ -1,7 +1,6 @@
 import os
 import functools
 import logging
-import diskcache
 import pickle
 
 from datasets import load_dataset
