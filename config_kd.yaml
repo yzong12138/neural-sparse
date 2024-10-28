@@ -21,9 +21,9 @@ kd_ensemble_teacher_kwargs:
   score_scale: 30
 miracl_from_disk: true
 
-output_dir: output/kd/bge
+output_dir: output/kd/bge-large-bs
 per_device_eval_batch_size: 50
-per_device_train_batch_size: 12
+per_device_train_batch_size: 18
 
 log_level: info
 max_steps: 50000
