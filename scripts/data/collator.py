@@ -6,6 +6,9 @@ import transformers
 
 logger = logging.getLogger(__name__)
 
+PREFIXES = {"intfloat/multilingual-e5-large": ["query: ", "passage: "]}
+EMPTY_PREFIX = ["", ""]
+
 
 class KnowledgeDistillDataCollator:
     def __init__(self, tokenizer, max_length=512, teacher_tokenizer_ids=[]):
@@ -15,6 +18,11 @@ class KnowledgeDistillDataCollator:
             transformers.AutoTokenizer.from_pretrained(tokenizer_id)
             for tokenizer_id in teacher_tokenizer_ids
         ]
+        self.prefixes = [EMPTY_PREFIX] + [
+            PREFIXES.get(teacher_tokenizer_id, EMPTY_PREFIX)
+            for teacher_tokenizer_id in teacher_tokenizer_ids
+        ]
+        logger.info(self.prefixes)
         logger.info(f"total tokenizers {len(self.tokenizers)}")
 
     # handle knowledge distillation input containing query, docs and scores
@@ -27,10 +35,11 @@ class KnowledgeDistillDataCollator:
 
         result = {"query": [], "docs": []}
 
-        for tokenizer in self.tokenizers:
+        for tokenizer, prefix in zip(self.tokenizers, self.prefixes):
+            q_prefix, d_prefix = prefix
             result["query"].append(
                 tokenizer(
-                    list(q),
+                    [q_prefix + x for x in list(q)],
                     padding=True,
                     truncation=True,
                     max_length=self.max_length,
@@ -40,7 +49,7 @@ class KnowledgeDistillDataCollator:
             )
             result["docs"].append(
                 tokenizer(
-                    docs,
+                    [d_prefix + x for x in docs],
                     padding=True,
                     truncation=True,
                     max_length=self.max_length,
