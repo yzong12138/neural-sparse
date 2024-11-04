@@ -59,7 +59,7 @@ class BEIRCorpusDataset(KeyValueDataset):
 
 
 class MiraclCorpusDataset(Dataset):
-    def __init__(self, corpus):
+    def __init__(self, corpus, transform_lambda=None):
         """
         Args:
             corpus (dict): The corpus dictionary where each key is a document ID, and the value is a dictionary with "title" and "text".
@@ -67,6 +67,7 @@ class MiraclCorpusDataset(Dataset):
         # Combine the title and text into a single string
         logger.info("start parsing miracl corpus")
         self.corpus = corpus
+        self.transform_lambda = transform_lambda
 
     def __len__(self):
         return len(self.corpus)
@@ -75,6 +76,8 @@ class MiraclCorpusDataset(Dataset):
         data = self.corpus[idx]
         key = data["docid"]
         value = data["title"] + " " + data["text"]
+        if self.transform_lambda is not None:
+            value = self.transform_lambda(value)
         return key, value
 
 
@@ -345,6 +348,8 @@ class CombinedDataset(Dataset):
 def get_miracl_dataset(source, lang, sample_num_one_query=2, from_disk=False):
     assert source in ["miracl", "tydi"]
     logger.info("load from kd")
+    if source == "miracl" and lang == "zh":
+        lang = "zhcn"
     return KnowledgeDistillDataset(
         DatasetsDataset.load_from_disk(f"mdata/kd/{source}-{lang}"),
         sample_num=sample_num_one_query,

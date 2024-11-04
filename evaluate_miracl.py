@@ -72,9 +72,20 @@ def main():
         with open(os.path.join(miracl_dir, "queries.json")) as f:
             queries = json.load(f)
 
+        transform_lambda = None
+        if dataset == "zh":
+            import zhconv
+
+            logger.info("transform")
+            transform_lambda = lambda text: zhconv.convert_for_mw(text, "zh-cn")
+            for q_id, query_text in list(queries.items()):
+                queries[q_id] = zhconv.convert_for_mw(query_text, "zh-cn")
+
         asyncio.run(
             ingest(
-                dataset=MiraclCorpusDataset(corpus=corpus),
+                dataset=MiraclCorpusDataset(
+                    corpus=corpus, transform_lambda=transform_lambda
+                ),
                 model=model,
                 out_dir=miracl_eval_dir,
                 index_name=dataset,
@@ -109,7 +120,7 @@ def main():
 
         accelerator.wait_for_everyone()
 
-    if accelerator.is_local_main_process:
+    if accelerator.is_local_main_process and data_args.save_eval_result:
         df = pd.DataFrame(result)
         for key in ["flops", "q_length", "d_length", "NDCG@10"]:
             avg_res[key] = sum(result[key]) / len(result[key])

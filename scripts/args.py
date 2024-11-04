@@ -34,6 +34,7 @@ class DataTrainingArguments:
     )
     kl_div_loss: List[str] = field(default_factory=lambda: ["kldiv"])
     miracl_from_disk: bool = field(default=False)
+    save_eval_result: bool = field(default=True)
 
     def __post_init__(self):
         return

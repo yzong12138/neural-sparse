@@ -2,15 +2,16 @@ logging_steps: 500
 # log_level_replica: info
 
 inf_free: true
-model_name_or_path: google-bert/bert-base-multilingual-uncased
-tokenizer_name: google-bert/bert-base-multilingual-uncased
-split_batch: 2
+idf_path: multilingual_idf_uncased.json
+model_name_or_path: models/uncased-marco-noidf
+tokenizer_name: models/uncased-marco-noidf
+split_batch: 4
 
 max_seq_length: 256
 beir_dir: data/beir
 training_mode: kd-ensemble
 # train_file: data/msmarco_mixed_scores_v3.json
-sample_num_one_query: 2
+sample_num_one_query: 3
 use_in_batch_negatives: true
 flops_d_lambda: 0.003
 flops_d_T: 10000
@@ -21,9 +22,9 @@ kd_ensemble_teacher_kwargs:
   score_scale: 30
 miracl_from_disk: true
 
-output_dir: output/kd/bge-large-bs
+output_dir: output/kd/w-idf
 per_device_eval_batch_size: 50
-per_device_train_batch_size: 18
+per_device_train_batch_size: 12
 
 log_level: info
 max_steps: 50000
