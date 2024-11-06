@@ -35,6 +35,7 @@ class DataTrainingArguments:
     kl_div_loss: List[str] = field(default_factory=lambda: ["kldiv"])
     miracl_from_disk: bool = field(default=False)
     save_eval_result: bool = field(default=True)
+    idf_lr: Optional[float] = field(default=None)
 
     def __post_init__(self):
         return
@@ -47,6 +48,7 @@ class ModelArguments:
     tokenizer_name: Optional[str] = field(default=None)
     idf_path: Optional[str] = field(default=None)
     split_batch: Optional[int] = field(default=1)
+    idf_requires_grad: Optional[bool] = field(default=False)
 
     def __post_init__(self):
         if self.tokenizer_name is None:

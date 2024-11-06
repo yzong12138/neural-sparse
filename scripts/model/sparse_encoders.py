@@ -10,7 +10,14 @@ logger = logging.getLogger(__name__)
 
 
 class SparseModel(torch.nn.Module):
-    def __init__(self, model_id, idf=None, tokenizer_id=None, split_batch=1):
+    def __init__(
+        self,
+        model_id,
+        idf=None,
+        tokenizer_id=None,
+        split_batch=1,
+        idf_requires_grad=False,
+    ):
         super().__init__()
 
         AutoConfig.register("DecompBert", DecompBertConfig)
@@ -25,16 +32,17 @@ class SparseModel(torch.nn.Module):
             for token in self.tokenizer.special_tokens_map.values()
         ]
 
-        idf_vector = [1] * self.tokenizer.vocab_size
+        idf_vector = [1.0] * self.tokenizer.vocab_size
         if idf is not None:
-            logger.info("set idf to the model")
+            logger.info(f"set idf to the model. requires_grad: {idf_requires_grad}")
             for token, weight in idf.items():
                 _id = self.tokenizer._convert_token_to_id_with_added_voc(token)
                 idf_vector[_id] = weight
         self.idf_vector = torch.nn.Parameter(
-            torch.tensor(idf_vector), requires_grad=False
+            torch.tensor(idf_vector), requires_grad=idf_requires_grad
         )
         self.split_batch = split_batch
+        self.idf_requires_grad = idf_requires_grad
 
     def forward(self, inf_free=False, **kwargs):
         # input kwargs is the features from tokenizer
@@ -86,7 +94,7 @@ class SparseModel(torch.nn.Module):
         )
         out[torch.arange(batch_size).unsqueeze(-1), input_ids] = 1
         out[:, self.special_token_ids] = 0
-        return out * self.idf_vector
+        return out * torch.relu(self.idf_vector)
 
 
 class SparsePostProcessor(object):

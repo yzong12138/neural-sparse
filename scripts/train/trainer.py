@@ -10,6 +10,7 @@ from ..data.dataset import CombinedRandomSampler, CombinedDataset
 from transformers import Trainer
 from transformers.trainer_utils import seed_worker
 from torch.utils.data import DataLoader
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,16 @@ class ModelWrapper(torch.nn.Module):
     def save(self, output_dir, **kwargs):
         self.sparse_model.backbone.save_pretrained(output_dir, **kwargs)
         self.sparse_model.tokenizer.save_pretrained(output_dir)
+
+        if self.sparse_model.idf_requires_grad:
+            idf_json = dict()
+            idf_vector = self.sparse_model.idf_vector.detach().cpu()
+            for idx in idf_vector.nonzero():
+                idf_json[self.sparse_model.tokenizer._convert_id_to_token(idx)] = float(
+                    idf_vector[idx]
+                )
+            with open(os.path.join(output_dir, "idf.json"), "w") as f:
+                json.dump(idf_json, f)
 
 
 class SparseModelTrainer(Trainer):
