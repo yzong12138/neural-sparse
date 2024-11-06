@@ -108,7 +108,7 @@ class SparseModelTrainer(Trainer):
 
         if self.state.global_step % self.args.logging_steps == 0:
             logger.info(
-                f"ranking loss moving avg:{self.ranking_loss_moving_avg}, d_flops: {d_flops}, flops_loss: {flops_loss} avg doc length: {(d_rep>0).sum()/d_rep.shape[0]}"
+                f"Step {self.state.global_step}. ranking loss moving avg:{self.ranking_loss_moving_avg}, d_flops: {d_flops}, flops_loss: {flops_loss} avg doc length: {(d_rep>0).sum()/d_rep.shape[0]}"
             )
         # DP reduce grad by sum, while DDP reduce grad by mean
         # scale the loss to fix the gap

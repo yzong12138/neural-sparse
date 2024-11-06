@@ -1,10 +1,10 @@
-logging_steps: 500
+logging_steps: 50
 # log_level_replica: info
 
 inf_free: true
-idf_path: multilingual_idf_uncased.json
-model_name_or_path: models/uncased-marco-noidf
-tokenizer_name: models/uncased-marco-noidf
+idf_path: multilingual_idf_minagg.json
+model_name_or_path: google-bert/bert-base-multilingual-uncased
+tokenizer_name: google-bert/bert-base-multilingual-uncased
 split_batch: 4
 
 max_seq_length: 256
@@ -13,7 +13,7 @@ training_mode: kd-ensemble
 # train_file: data/msmarco_mixed_scores_v3.json
 sample_num_one_query: 3
 use_in_batch_negatives: true
-flops_d_lambda: 0.003
+flops_d_lambda: 0.02
 flops_d_T: 10000
 ranking_loss_weight: 1
 kd_ensemble_teacher_kwargs:
@@ -22,7 +22,7 @@ kd_ensemble_teacher_kwargs:
   score_scale: 30
 miracl_from_disk: true
 
-output_dir: output/kd/w-idf
+output_dir: output/kd/idf-minagg
 per_device_eval_batch_size: 50
 per_device_train_batch_size: 12
 
@@ -34,6 +34,6 @@ weight_decay: 0.01
 lr_scheduler_type: linear
 warmup_steps: 6000
 save_strategy: steps
-save_steps: 25000
+save_steps: 50000
 dataloader_drop_last: true
 max_grad_norm: null
