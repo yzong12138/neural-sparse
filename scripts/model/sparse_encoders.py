@@ -3,12 +3,25 @@ import transformers
 import itertools
 import logging
 
+from .decomposition_bert import DecompBertConfig, DecompBertForMaskedLM
+from transformers import AutoModelForMaskedLM, BertForMaskedLM, AutoConfig
+
 logger = logging.getLogger(__name__)
 
 
 class SparseModel(torch.nn.Module):
-    def __init__(self, model_id, idf=None, tokenizer_id=None):
+    def __init__(
+        self,
+        model_id,
+        idf=None,
+        tokenizer_id=None,
+        split_batch=1,
+        idf_requires_grad=False,
+    ):
         super().__init__()
+
+        AutoConfig.register("DecompBert", DecompBertConfig)
+        AutoModelForMaskedLM.register(DecompBertConfig, DecompBertForMaskedLM)
 
         if tokenizer_id is None:
             tokenizer_id = model_id
@@ -19,15 +32,17 @@ class SparseModel(torch.nn.Module):
             for token in self.tokenizer.special_tokens_map.values()
         ]
 
-        idf_vector = [1] * self.tokenizer.vocab_size
+        idf_vector = [1.0] * self.tokenizer.vocab_size
         if idf is not None:
-            logger.info("set idf to the model")
+            logger.info(f"set idf to the model. requires_grad: {idf_requires_grad}")
             for token, weight in idf.items():
                 _id = self.tokenizer._convert_token_to_id_with_added_voc(token)
                 idf_vector[_id] = weight
         self.idf_vector = torch.nn.Parameter(
-            torch.tensor(idf_vector), requires_grad=False
+            torch.tensor(idf_vector), requires_grad=idf_requires_grad
         )
+        self.split_batch = split_batch
+        self.idf_requires_grad = idf_requires_grad
 
     def forward(self, inf_free=False, **kwargs):
         # input kwargs is the features from tokenizer
@@ -37,12 +52,39 @@ class SparseModel(torch.nn.Module):
             return self._encode(**kwargs)
 
     def _encode(self, **kwargs):
-        output = self.backbone(**kwargs)[0]
-        values, _ = torch.max(
-            output * kwargs.get("attention_mask").unsqueeze(-1), dim=1
-        )
-        values = torch.log(1 + torch.relu(values))
-        return values
+        if self.split_batch == 1:
+            output = self.backbone(**kwargs)[0]
+            values, _ = torch.max(
+                output * kwargs.get("attention_mask").unsqueeze(-1), dim=1
+            )
+            values = torch.log(1 + torch.relu(values))
+            return values
+
+        batch_size = kwargs["input_ids"].size(0)
+        split_sizes = [batch_size // self.split_batch] * self.split_batch
+        remainder = batch_size % self.split_batch
+        for i in range(remainder):
+            split_sizes[i] += 1
+
+        outputs = []
+        start = 0
+        assert isinstance(self.backbone, BertForMaskedLM)
+
+        attention_mask = kwargs.get("attention_mask")
+        output = self.backbone.bert(**kwargs)[0]
+        output = self.backbone.cls.predictions.transform(output)
+        for split_size in split_sizes:
+            end = start + split_size
+            values = self.backbone.cls.predictions.decoder(output[start:end])
+            values, _ = torch.max(
+                values * attention_mask[start:end].unsqueeze(-1), dim=1
+            )
+            outputs.append(values)
+            start = end
+
+        output = torch.cat(outputs, dim=0)
+        output = torch.log(1 + torch.relu(output))
+        return output
 
     def _encode_inf_free(self, **kwargs):
         input_ids = kwargs.get("input_ids")
@@ -52,7 +94,7 @@ class SparseModel(torch.nn.Module):
         )
         out[torch.arange(batch_size).unsqueeze(-1), input_ids] = 1
         out[:, self.special_token_ids] = 0
-        return out * self.idf_vector
+        return out * torch.relu(self.idf_vector)
 
 
 class SparsePostProcessor(object):

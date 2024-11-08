@@ -1,11 +1,18 @@
+import os
 import json
 import logging
 import random
 
+from ..utils import is_ddp_enabled
+from .data_utils import get_corpus_id_to_text
+
+from itertools import chain
 from tqdm import tqdm
+from datasets import load_dataset, Dataset as DatasetsDataset
 from beir import util
 from beir.datasets.data_loader import GenericDataLoader
 from torch.utils.data import Dataset
+from torch.utils.data.dataloader import DataLoader, Sampler, RandomSampler, BatchSampler
 
 logger = logging.getLogger(__name__)
 
@@ -51,13 +58,48 @@ class BEIRCorpusDataset(KeyValueDataset):
         super().__init__(combined_corpus)
 
 
+class MiraclCorpusDataset(Dataset):
+    def __init__(self, corpus, transform_lambda=None):
+        """
+        Args:
+            corpus (dict): The corpus dictionary where each key is a document ID, and the value is a dictionary with "title" and "text".
+        """
+        # Combine the title and text into a single string
+        logger.info("start parsing miracl corpus")
+        self.corpus = corpus
+        self.transform_lambda = transform_lambda
+
+    def __len__(self):
+        return len(self.corpus)
+
+    def __getitem__(self, idx):
+        data = self.corpus[idx]
+        key = data["docid"]
+        value = data["title"] + " " + data["text"]
+        if self.transform_lambda is not None:
+            value = self.transform_lambda(value)
+        return key, value
+
+
 class DDPDatasetWithRank(Dataset):
-    def __init__(self, inner_dataset, local_rank, world_size):
+    def __init__(
+        self, inner_dataset, local_rank, world_size, drop=False, shuffle=False
+    ):
         self.inner_dataset = inner_dataset
         number_of_samples = len(self.inner_dataset)
+        if drop:
+            number_of_samples = number_of_samples - number_of_samples % world_size
         self.idxs = [
             i for i in range(number_of_samples) if i % world_size == local_rank
         ]
+        if shuffle:
+            state = random.getstate()
+            random.seed(local_rank)
+            random.shuffle(self.idxs)
+            random.setstate(state)
+        logger.info(
+            f"local index {local_rank}, world size {world_size}, local sample number {len(self.idxs)}"
+        )
 
     def __len__(self):
         return len(self.idxs)
@@ -67,7 +109,7 @@ class DDPDatasetWithRank(Dataset):
 
 
 class KnowledgeDistillDataset(Dataset):
-    def __init__(self, all_data, sample_num=2):
+    def __init__(self, all_data, sample_num=2, shuffle=True):
         """
         Args:
             data: A list of dictionary which have "query", "docs" and "scores" list.
@@ -77,27 +119,45 @@ class KnowledgeDistillDataset(Dataset):
         logger.info(f"KnowledgeDistillDataset input data number: {len(all_data)}")
         assert sample_num >= 2
 
+        has_scores = "scores" in all_data[0]
+
         for data in all_data:
             query = data["query"]
             texts = data["docs"]
-            scores = data["scores"]
-            assert len(texts) == len(scores)
+            if has_scores:
+                scores = data["scores"]
+                assert len(texts) == len(scores)
+            else:
+                scores = [None] * len(texts)
 
-            idxs = list(range(len(scores)))
-            random.shuffle(idxs)
-            for i in range(0, len(scores), sample_num):
-                # we need to make sure all samples have same negative number
-                # to split all documents and perform matmul
-                if len(scores) - i < sample_num:
-                    break
-                sample_idxs = idxs[i : i + sample_num]
-                self.data.append(
-                    [
-                        query,
-                        [texts[idx] for idx in sample_idxs],
-                        [scores[idx] for idx in sample_idxs],
-                    ]
-                )
+            if shuffle:
+                idxs = list(range(len(scores)))
+                random.shuffle(idxs)
+                for i in range(0, len(scores), sample_num):
+                    # we need to make sure all samples have same negative number
+                    # to split all documents and perform matmul
+                    if len(scores) - i < sample_num:
+                        break
+                    sample_idxs = idxs[i : i + sample_num]
+                    self.data.append(
+                        [
+                            query,
+                            [texts[idx] for idx in sample_idxs],
+                            [scores[idx] for idx in sample_idxs],
+                        ]
+                    )
+            else:
+                idxs = list(range(len(scores)))
+                step = len(scores) // sample_num
+                for i in range(0, step):
+                    sample_idxs = [idxs[j * step + i] for j in range(sample_num)]
+                    self.data.append(
+                        [
+                            query,
+                            [texts[idx] for idx in sample_idxs],
+                            [scores[idx] for idx in sample_idxs],
+                        ]
+                    )
         logger.info(
             f"KnowledgeDistillDataset after process data number: {len(self.data)}"
         )
@@ -140,7 +200,7 @@ class MsMarcoKDDataset(KnowledgeDistillDataset):
             data = {"query": queries[q_id], "docs": texts, "scores": scores}
             all_data.append(data)
 
-        super().__init__(all_data=all_data, sample_num=sample_num)
+        super().__init__(all_data=all_data, sample_num=sample_num, shuffle=False)
 
     def __len__(self):
         return len(self.data)
@@ -160,7 +220,7 @@ class PosNegsDataset(Dataset):
         assert neg_sample_num >= 1
         self.data = []
         logger.info(f"input data number: {len(data)}")
-        for dict_ in data:
+        for dict_ in tqdm(data):
             dict_["negs"] = dict_["negs"]
             for i in range(0, len(dict_.get("negs", [])), neg_sample_num):
                 if len(dict_["negs"]) - i < neg_sample_num:
@@ -179,3 +239,143 @@ class PosNegsDataset(Dataset):
 
     def __getitem__(self, idx):
         return self.data[idx]
+
+
+class MiraclTrainingDataset(Dataset):
+    def __init__(self, lang="en", source="miracl/miracl", dataset=None):
+        if dataset is None:
+            miracl = load_dataset(source, lang, trust_remote_code=True)
+            self.dataset = miracl["train"]
+        else:
+            self.dataset = dataset
+
+        self.idx_to_data = []
+        self.neg_passages = []
+        for i, data in tqdm(enumerate(self.dataset)):
+            for j in range(len(data["positive_passages"])):
+                self.idx_to_data.append((i, j))
+            self.neg_passages.append([neg["text"] for neg in data["negative_passages"]])
+
+    def __len__(self):
+        return len(self.idx_to_data)
+
+    def __getitem__(self, idx):
+        i = self.idx_to_data[idx][0]
+        j = self.idx_to_data[idx][1]
+        return {
+            "query": self.dataset[i]["query"],
+            "pos": self.dataset[i]["positive_passages"][j]["text"],
+            "negs": self.neg_passages[i],
+        }
+
+
+class MiraclTrainingDatasetDisk(Dataset):
+    def __init__(self, lang="en", source="miracl", root_dir="mdata/raw"):
+        miracl = DatasetsDataset.load_from_disk(os.path.join(root_dir, source, lang))
+        corpus = get_corpus_id_to_text(source, lang)
+        self.data = []
+        for data in tqdm(miracl):
+            self.data.append(
+                {"query": data["query"], "docs": [corpus[hit] for hit in data["hits"]]}
+            )
+        del corpus
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        return self.data[idx]
+
+
+class CombinedRandomSampler(Sampler):
+    def __init__(self, datasets, batch_size, drop_last=True):
+        self.datasets = datasets
+        self.batch_size = batch_size
+        self.samplers = [
+            BatchSampler(
+                RandomSampler(dataset), batch_size=batch_size, drop_last=drop_last
+            )
+            for dataset in datasets
+        ]
+        self.dataset_sequences = None
+
+    def set_dataset_sequences(self, dataset_sequences=None):
+        if dataset_sequences is None:
+            dataset_sequences = [
+                [i] * len(self.samplers[i]) for i in range(len(self.samplers))
+            ]
+            dataset_sequences = list(chain(*dataset_sequences))
+            if is_ddp_enabled():
+                logger.info("DDP is enabled, set seed to fix dataset sequence iter")
+
+                state = random.getstate()
+                random.seed(0)
+                random.shuffle(dataset_sequences)
+                random.setstate(state)
+
+                logger.info(dataset_sequences[:10])
+            else:
+                random.shuffle(dataset_sequences)
+        self.dataset_sequences = dataset_sequences
+
+    def __iter__(self):
+        if self.dataset_sequences is None:
+            self.set_dataset_sequences()
+
+        iters = [iter(sampler) for sampler in self.samplers]
+        for dataset_idx in self.dataset_sequences:
+            idxs = next(iters[dataset_idx])
+            yield [[dataset_idx, idx] for idx in idxs]
+
+    def __len__(self):
+        return sum(map(len, self.samplers))
+
+
+class CombinedDataset(Dataset):
+    def __init__(self, datasets):
+        self.datasets = datasets
+        self.length = sum(map(len, self.datasets))
+        self.no_prepare = True
+
+    def __len__(self):
+        return self.length
+
+    def __getitem__(self, idx):
+        dataset_idx, data_idx = idx
+        return self.datasets[dataset_idx][data_idx]
+
+
+def get_miracl_dataset(source, lang, sample_num_one_query=2, from_disk=False):
+    assert source in ["miracl", "tydi"]
+    logger.info("load from kd")
+    if source == "miracl" and lang == "zh":
+        lang = "zhcn"
+    return KnowledgeDistillDataset(
+        DatasetsDataset.load_from_disk(f"mdata/kd/{source}-{lang}"),
+        sample_num=sample_num_one_query,
+        shuffle=False,
+    )
+    # if from_disk:
+    #     return KnowledgeDistillDataset(
+    #         MiraclTrainingDatasetDisk(lang, source),
+    #         sample_num=sample_num_one_query,
+    #         shuffle=False,
+    #     )
+    # else:
+    #     return PosNegsDataset(
+    #         MiraclTrainingDataset(lang),
+    #         neg_sample_num=sample_num_one_query,
+    #     )
+
+
+def get_miracl_datasets(source, datasets_str, sample_num_one_query=2, from_disk=False):
+    assert source in ["miracl", "tydi"]
+    datasets = []
+    for dataset in datasets_str.split(","):
+        datasets.append(
+            get_miracl_dataset(source, dataset, sample_num_one_query, from_disk)
+        )
+        logger.info(
+            f"load training data for {source} {dataset}. Sample number: {len(datasets[-1])}"
+        )
+    return datasets

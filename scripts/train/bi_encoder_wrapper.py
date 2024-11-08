@@ -94,3 +94,30 @@ class BiEncoderWrapper:
             scores = scores / len(self.models)
 
         return scores * self.score_scale
+
+    def get_scores_batch(self, q_features_list, d_features_list):
+        assert len(q_features_list) == len(self.models)
+        scores = 0
+        with torch.no_grad():
+            for i, model in enumerate(self.models):
+                q_rep = model(**q_features_list[i])
+                d_rep = model(**d_features_list[i])
+                if not self.use_in_batch_negatives:
+                    d_rep = d_rep.reshape(q_rep.shape[0], -1, d_rep.shape[-1])
+                    score = torch.bmm(
+                        d_rep, q_rep.reshape(q_rep.shape[0], q_rep.shape[-1], 1)
+                    ).squeeze()
+                else:
+                    d_rep = gather_rep(d_rep, self.accelerator)
+                    score = torch.matmul(q_rep, d_rep.t())
+
+                max_t = score.max(dim=1).values
+                min_t = score.min(dim=1).values
+                score = (score - min_t.unsqueeze(-1)) / (
+                    (max_t - min_t + 1e-6).unsqueeze(-1)
+                )
+                scores += score
+
+            scores = scores / len(self.models)
+
+        return scores * self.score_scale

@@ -53,7 +53,11 @@ def get_model(model_args):
             idf = json.load(f)
 
     model = SparseModel(
-        model_args.model_name_or_path, idf=idf, tokenizer_id=model_args.tokenizer_name
+        model_args.model_name_or_path,
+        idf=idf,
+        tokenizer_id=model_args.tokenizer_name,
+        split_batch=model_args.split_batch,
+        idf_requires_grad=model_args.idf_requires_grad,
     )
 
     return model
@@ -118,3 +122,13 @@ async def batch_search(
             print(e)
             return {"error": str(e)}
     return result
+
+
+def get_logger_console(name):
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
+    console_handler = logging.StreamHandler()
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+    return logger

@@ -6,6 +6,10 @@ from typing import Optional, Union, List
 from transformers import HfArgumentParser, TrainingArguments
 
 beir_datasets = "trec-covid,nfcorpus,nq,hotpotqa,fiqa,arguana,webis-touche2020,dbpedia-entity,scidocs,fever,climate-fever,scifact,quora"
+miracl_datasets = "bn,te,es,fr,id,hi,ru,ar,zh,fa,ja,fi,sw,ko,en"
+tydi_datasets = (
+    "arabic,bengali,english,finnish,indonesian,japanese,korean,russian,swahili,telugu"
+)
 
 
 @dataclass
@@ -13,8 +17,10 @@ class DataTrainingArguments:
     max_seq_length: int = field(default=512)
     train_file: Optional[str] = field(default=None)
     beir_dir: str = field(default="data/beir")
+    miracl_dir: str = field(default="mdata/miracl_eval")
     # dataset name split by comma
     beir_datasets: str = field(default=beir_datasets)
+    miracl_datasets: str = field(default=miracl_datasets)
     training_mode: str = field(default="kd-marco")
     sample_num_one_query: int = field(default=2)
     use_in_batch_negatives: bool = field(default=False)
@@ -27,6 +33,9 @@ class DataTrainingArguments:
         default_factory=dict,
     )
     kl_div_loss: List[str] = field(default_factory=lambda: ["kldiv"])
+    miracl_from_disk: bool = field(default=False)
+    save_eval_result: bool = field(default=True)
+    idf_lr: Optional[float] = field(default=None)
 
     def __post_init__(self):
         return
@@ -38,11 +47,19 @@ class ModelArguments:
     model_name_or_path: str = field(default=None)
     tokenizer_name: Optional[str] = field(default=None)
     idf_path: Optional[str] = field(default=None)
+    split_batch: Optional[int] = field(default=1)
+    idf_requires_grad: Optional[bool] = field(default=False)
 
     def __post_init__(self):
         if self.tokenizer_name is None:
             self.tokenizer_name = self.model_name_or_path
         return
+
+
+@dataclass
+class MiningArguments:
+    mine_datasets: str = field(default=None)
+    source: str = field(default=None)
 
 
 def parse_args():

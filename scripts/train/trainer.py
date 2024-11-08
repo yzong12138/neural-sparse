@@ -5,8 +5,12 @@ import torch
 from ..model.sparse_encoders import SparseModel
 from .bi_encoder_wrapper import BiEncoderWrapper
 from ..utils import gather_rep
+from ..data.dataset import CombinedRandomSampler, CombinedDataset
 
 from transformers import Trainer
+from transformers.trainer_utils import seed_worker
+from torch.utils.data import DataLoader
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +38,16 @@ class ModelWrapper(torch.nn.Module):
         self.sparse_model.backbone.save_pretrained(output_dir, **kwargs)
         self.sparse_model.tokenizer.save_pretrained(output_dir)
 
+        if self.sparse_model.idf_requires_grad:
+            idf_json = dict()
+            idf_vector = self.sparse_model.idf_vector.detach().cpu()
+            for idx in idf_vector.nonzero():
+                idf_json[self.sparse_model.tokenizer._convert_id_to_token(idx)] = float(
+                    idf_vector[idx]
+                )
+            with open(os.path.join(output_dir, "idf.json"), "w") as f:
+                json.dump(idf_json, f)
+
 
 class SparseModelTrainer(Trainer):
     def __init__(self, model_args, data_args, loss_functions, **kwargs):
@@ -58,8 +72,8 @@ class SparseModelTrainer(Trainer):
 
     def compute_loss(self, model: SparseModel, inputs, return_outputs=False):
         if hasattr(self, "bi_encoder_teacher"):
-            scores = self.bi_encoder_teacher.get_scores(
-                q_features=inputs["query"], d_features=inputs["docs"]
+            scores = self.bi_encoder_teacher.get_scores_batch(
+                q_features_list=inputs["query"][1:], d_features_list=inputs["docs"][1:]
             )
             inputs["scores"] = scores
 
@@ -67,10 +81,10 @@ class SparseModelTrainer(Trainer):
 
         # we construct this input and model wrapper to make it work for both data parallel and DDP
         model_wrapper_input = {
-            "q_input_ids": inputs["query"]["input_ids"],
-            "q_attention_mask": inputs["query"]["attention_mask"],
-            "input_ids": inputs["docs"]["input_ids"],
-            "attention_mask": inputs["docs"]["attention_mask"],
+            "q_input_ids": inputs["query"][0]["input_ids"],
+            "q_attention_mask": inputs["query"][0]["attention_mask"],
+            "input_ids": inputs["docs"][0]["input_ids"],
+            "attention_mask": inputs["docs"][0]["attention_mask"],
         }
 
         d_rep, q_rep = model(model_wrapper_input)
@@ -105,7 +119,7 @@ class SparseModelTrainer(Trainer):
 
         if self.state.global_step % self.args.logging_steps == 0:
             logger.info(
-                f"ranking loss moving avg:{self.ranking_loss_moving_avg}, d_flops: {d_flops}, flops_loss: {flops_loss} avg doc length: {(d_rep>0).sum()/d_rep.shape[0]}"
+                f"Step {self.state.global_step}. ranking loss moving avg:{self.ranking_loss_moving_avg}, d_flops: {d_flops}, flops_loss: {flops_loss} avg doc length: {(d_rep>0).sum()/d_rep.shape[0]}"
             )
         # DP reduce grad by sum, while DDP reduce grad by mean
         # scale the loss to fix the gap
@@ -144,3 +158,43 @@ class SparseModelTrainer(Trainer):
             )
             if use_accelerator_prepare:
                 self.accelerator.prepare(self.bi_encoder_teacher.models[i])
+
+    def get_train_dataloader(self) -> DataLoader:
+        if self.train_dataset is None:
+            raise ValueError("Trainer: training requires a train_dataset.")
+
+        train_dataset = self.train_dataset
+        data_collator = self.data_collator
+        data_collator = self._get_collator_with_removed_columns(
+            data_collator, description="training"
+        )
+
+        dataloader_params = {
+            "batch_size": self._train_batch_size,
+            "collate_fn": data_collator,
+            "num_workers": self.args.dataloader_num_workers,
+            "pin_memory": self.args.dataloader_pin_memory,
+            "persistent_workers": self.args.dataloader_persistent_workers,
+        }
+
+        if not isinstance(train_dataset, torch.utils.data.IterableDataset):
+            dataloader_params["sampler"] = self._get_train_sampler()
+            dataloader_params["drop_last"] = self.args.dataloader_drop_last
+            dataloader_params["worker_init_fn"] = seed_worker
+            dataloader_params["prefetch_factor"] = self.args.dataloader_prefetch_factor
+
+        if isinstance(train_dataset, CombinedDataset):
+            logger.info("Combined dataset. Set combined sampler.")
+            sampler = CombinedRandomSampler(
+                train_dataset.datasets, batch_size=self._train_batch_size
+            )
+            dataloader_params.pop("sampler")
+            dataloader_params.pop("batch_size")
+            dataloader_params.pop("drop_last")
+            dataloader_params["batch_sampler"] = sampler
+
+        if hasattr(train_dataset, "no_prepare") and self.accelerator.num_processes > 1:
+            if train_dataset.no_prepare:
+                logger.info("no accelerator prepare")
+                return DataLoader(train_dataset, **dataloader_params)
+        return self.accelerator.prepare(DataLoader(train_dataset, **dataloader_params))
