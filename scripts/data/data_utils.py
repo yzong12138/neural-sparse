@@ -41,19 +41,6 @@ def get_corpus(source, dataset):
         return dataset
 
 
-@cached
-def get_corpus_id_to_text(source, dataset, concat_title=True):
-    logger.info(
-        f"start building corpus id to text for {source} {dataset}, with concat title set to {concat_title}"
-    )
-    corpus = get_corpus(source, dataset)
-    id_to_text = {}
-    for data in corpus:
-        text = data["title"] + " " + data["text"] if concat_title else data["text"]
-        id_to_text[data["docid"]] = text
-    return id_to_text
-
-
 def get_queries(source, dataset):
     # return a tuple of (dict<query_id, query_text> and dict<query_id, list<pos_doc_id>>)
     queries = {}

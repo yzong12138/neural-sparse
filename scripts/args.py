@@ -16,12 +16,14 @@ tydi_datasets = (
 class DataTrainingArguments:
     max_seq_length: int = field(default=512)
     train_file: Optional[str] = field(default=None)
+    train_file_dir: Optional[str] = field(default=None)
+    data_type: Optional[str] = field(default="kd")
+    loss_types: List[str] = field(default_factory=lambda: ["kldiv"])
     beir_dir: str = field(default="data/beir")
     miracl_dir: str = field(default="mdata/miracl_eval")
     # dataset name split by comma
     beir_datasets: str = field(default=beir_datasets)
     miracl_datasets: str = field(default=miracl_datasets)
-    training_mode: str = field(default="kd-marco")
     sample_num_one_query: int = field(default=2)
     use_in_batch_negatives: bool = field(default=False)
     flops_d_lambda: float = field(default=1e-3)
@@ -32,9 +34,6 @@ class DataTrainingArguments:
     kd_ensemble_teacher_kwargs: Optional[Union[dict, str]] = field(
         default_factory=dict,
     )
-    kl_div_loss: List[str] = field(default_factory=lambda: ["kldiv"])
-    miracl_from_disk: bool = field(default=False)
-    save_eval_result: bool = field(default=True)
     idf_lr: Optional[float] = field(default=None)
 
     def __post_init__(self):
