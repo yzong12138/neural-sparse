@@ -98,3 +98,6 @@ class InfoNCELoss(SparseTrainingLoss):
         target[:, 0] = 1
         output = self.loss(scores, target)
         return output
+
+
+LOSS_CLS_MAP = {"infonce": InfoNCELoss, "kldiv": KLDivLoss, "marginmse": MarginMSELoss}

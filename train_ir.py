@@ -1,27 +1,21 @@
 import yaml
 import logging
 import os
-import json
 import sys
 from dataclasses import asdict
 
 from scripts.train.trainer import SparseModelTrainer
-from scripts.train.loss import KLDivLoss, InfoNCELoss, MarginMSELoss
+from scripts.train.loss import LOSS_CLS_MAP
 from scripts.data.dataset import (
-    KnowledgeDistillDataset,
-    MsMarcoKDDataset,
-    PosNegsDataset,
-    MiraclTrainingDataset,
-    CombinedDataset,
-    CombinedRandomSampler,
-    DDPDatasetWithRank,
-    get_miracl_datasets,
+    load_dataset,
+    load_datasets,
 )
-from scripts.data.collator import KnowledgeDistillDataCollator, PosNegsDataCollator
+from scripts.data.collator import (
+    COLLATOR_CLS_MAP,
+)
 from scripts.utils import set_logging, get_model
-from scripts.args import parse_args, miracl_datasets, tydi_datasets
+from scripts.args import parse_args
 
-from datasets import Dataset
 from transformers import set_seed
 from transformers.optimization import AdamW, get_linear_schedule_with_warmup
 
@@ -47,86 +41,30 @@ def main():
     set_logging(training_args, "train.log")
     set_seed(training_args.seed)
 
+    # model
     model = get_model(model_args)
+
+    # data collator
+    data_collator = COLLATOR_CLS_MAP[data_args.data_type](
+        model.tokenizer,
+        data_args.max_seq_length,
+        data_args.kd_ensemble_teacher_kwargs.get("teacher_tokenizer_ids", []),
+    )
+    logger.info(f"data collator: {data_collator}")
+
+    # loss functions
     loss_functions = []
-
-    datasets = []
-    datasets = datasets + get_miracl_datasets(
-        "miracl",
-        miracl_datasets,
-        data_args.sample_num_one_query,
-        data_args.miracl_from_disk,
-    )
-    datasets = datasets + get_miracl_datasets(
-        "tydi",
-        tydi_datasets,
-        data_args.sample_num_one_query,
-        data_args.miracl_from_disk,
-    )
-
-    datasets = [
-        DDPDatasetWithRank(
-            dataset,
-            training_args.local_process_index,
-            training_args.world_size,
-            drop=True if training_args.world_size != 1 else False,
-            shuffle=True if training_args.world_size != 1 else False,
-        )
-        for dataset in datasets
-    ]
-    dataset = CombinedDataset(datasets)
-
-    if data_args.training_mode.startswith("kd"):
-        if data_args.training_mode.split("-")[-1] == "ensemble":
-            if data_args.miracl_from_disk:
-                logger.info("knowledge distill data collator")
-                data_collator = KnowledgeDistillDataCollator(
-                    model.tokenizer,
-                    data_args.max_seq_length,
-                    teacher_tokenizer_ids=data_args.kd_ensemble_teacher_kwargs.get(
-                        "model_ids", []
-                    ),
-                )
-            else:
-                data_collator = PosNegsDataCollator(
-                    model.tokenizer,
-                    data_args.max_seq_length,
-                    teacher_tokenizer_ids=data_args.kd_ensemble_teacher_kwargs.get(
-                        "model_ids", []
-                    ),
-                )
-        else:
-            with open(data_args.train_file) as f:
-                data = f.readlines()
-            data = [json.loads(line) for line in data]
-            dataset = KnowledgeDistillDataset(
-                data, sample_num=data_args.sample_num_one_query
-            )
-            data_collator = KnowledgeDistillDataCollator(
-                model.tokenizer, data_args.max_seq_length
-            )
-
-        for loss_type in data_args.kl_div_loss:
-            loss_cls = KLDivLoss if loss_type == "kldiv" else MarginMSELoss
-            logger.info(loss_cls)
-            loss_functions.append(
-                loss_cls(
-                    use_in_batch_negatives=data_args.use_in_batch_negatives,
-                    weight=data_args.ranking_loss_weight,
-                )
-            )
-
-    elif data_args.training_mode.startswith("infonce"):
-        data_collator = PosNegsDataCollator(model.tokenizer, data_args.max_seq_length)
-
+    for loss_type in data_args.loss_types:
+        loss_cls = LOSS_CLS_MAP[loss_type]
+        logger.info(f"add loss: {loss_cls}")
         loss_functions.append(
-            InfoNCELoss(
-                weight=data_args.ranking_loss_weight,
+            loss_cls(
                 use_in_batch_negatives=data_args.use_in_batch_negatives,
+                weight=data_args.ranking_loss_weight,
             )
         )
 
-    # split to eval
+    # optimizer
     if model_args.idf_requires_grad == False or data_args.idf_lr is None:
         optimizer = AdamW(
             model.parameters(),
@@ -151,6 +89,24 @@ def main():
         num_training_steps=training_args.max_steps,
     )
 
+    if data_args.train_file is not None:
+        dataset = load_dataset(
+            path=data_args.train_file,
+            cls=data_args.data_type,
+            shuffle=False,
+            sample_num_one_query=data_args.sample_num_one_query,
+        )
+    elif data_args.train_file_dir is not None:
+        dataset = load_datasets(
+            path=data_args.train_file,
+            cls=data_args.data_type,
+            training_args=training_args,
+            shuffle=False,
+            sample_num_one_query=data_args.sample_num_one_query,
+        )
+    else:
+        raise ValueError("train_file or train_file_dir must be specified")
+
     trainer = SparseModelTrainer(
         model_args=model_args,
         data_args=data_args,
@@ -162,7 +118,8 @@ def main():
         optimizers=(optimizer, scheduler),
     )
 
-    if data_args.training_mode.split("-")[-1] == "ensemble":
+    if len(data_args.kd_ensemble_teacher_kwargs) != 0:
+        logger.info(f"Set bi-encoder teacher. {data_args.kd_ensemble_teacher_kwargs}")
         trainer.set_bi_encoder_teacher()
     trainer.train()
 

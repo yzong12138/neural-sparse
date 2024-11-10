@@ -4,7 +4,6 @@ import logging
 import random
 
 from ..utils import is_ddp_enabled
-from .data_utils import get_corpus_id_to_text
 
 from itertools import chain
 from tqdm import tqdm
@@ -210,26 +209,26 @@ class MsMarcoKDDataset(KnowledgeDistillDataset):
 
 
 class PosNegsDataset(Dataset):
-    def __init__(self, data, neg_sample_num=3):
+    def __init__(self, data, sample_num=3, **kwargs):
         """
         Args:
             data: A list of dictionary which have "query", "pos" and "negs" list.
                 An example: {"query":"hi","pos":"hello","negs":["hi","world"]}
                 "negs" is optional
         """
-        assert neg_sample_num >= 1
+        assert sample_num >= 1
         self.data = []
         logger.info(f"input data number: {len(data)}")
         for dict_ in tqdm(data):
             dict_["negs"] = dict_["negs"]
-            for i in range(0, len(dict_.get("negs", [])), neg_sample_num):
-                if len(dict_["negs"]) - i < neg_sample_num:
+            for i in range(0, len(dict_.get("negs", [])), sample_num):
+                if len(dict_["negs"]) - i < sample_num:
                     break
                 self.data.append(
                     [
                         dict_["query"],
                         dict_["pos"],
-                        dict_.get("negs", [])[i : i + neg_sample_num],
+                        dict_.get("negs", [])[i : i + sample_num],
                     ]
                 )
         logger.info(f"after process data number: {len(self.data)}")
@@ -267,24 +266,6 @@ class MiraclTrainingDataset(Dataset):
             "pos": self.dataset[i]["positive_passages"][j]["text"],
             "negs": self.neg_passages[i],
         }
-
-
-class MiraclTrainingDatasetDisk(Dataset):
-    def __init__(self, lang="en", source="miracl", root_dir="mdata/raw"):
-        miracl = DatasetsDataset.load_from_disk(os.path.join(root_dir, source, lang))
-        corpus = get_corpus_id_to_text(source, lang)
-        self.data = []
-        for data in tqdm(miracl):
-            self.data.append(
-                {"query": data["query"], "docs": [corpus[hit] for hit in data["hits"]]}
-            )
-        del corpus
-
-    def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, idx):
-        return self.data[idx]
 
 
 class CombinedRandomSampler(Sampler):
@@ -345,37 +326,34 @@ class CombinedDataset(Dataset):
         return self.datasets[dataset_idx][data_idx]
 
 
-def get_miracl_dataset(source, lang, sample_num_one_query=2, from_disk=False):
-    assert source in ["miracl", "tydi"]
-    logger.info("load from kd")
-    if source == "miracl" and lang == "zh":
-        lang = "zhcn"
-    return KnowledgeDistillDataset(
-        DatasetsDataset.load_from_disk(f"mdata/kd/{source}-{lang}"),
+DATASET_CLS_MAP = {"kd": KnowledgeDistillDataset, "posnegs": PosNegsDataset}
+
+
+def load_dataset(path, cls, shuffle=False, sample_num_one_query=2):
+    logger.info(f"load dataset from {path}. dataset cls: {DATASET_CLS_MAP[cls]}")
+    return DATASET_CLS_MAP[cls](
+        DatasetsDataset.load_from_disk(path),
         sample_num=sample_num_one_query,
-        shuffle=False,
+        shuffle=shuffle,
     )
-    # if from_disk:
-    #     return KnowledgeDistillDataset(
-    #         MiraclTrainingDatasetDisk(lang, source),
-    #         sample_num=sample_num_one_query,
-    #         shuffle=False,
-    #     )
-    # else:
-    #     return PosNegsDataset(
-    #         MiraclTrainingDataset(lang),
-    #         neg_sample_num=sample_num_one_query,
-    #     )
 
 
-def get_miracl_datasets(source, datasets_str, sample_num_one_query=2, from_disk=False):
-    assert source in ["miracl", "tydi"]
+def load_datasets(path, cls, training_args, shuffle=False, sample_num_one_query=2):
     datasets = []
-    for dataset in datasets_str.split(","):
-        datasets.append(
-            get_miracl_dataset(source, dataset, sample_num_one_query, from_disk)
+    for dataset in os.listdir(path):
+        dataset_path = os.path.join(path, dataset)
+        datasets.append(load_dataset(dataset_path, cls, shuffle, sample_num_one_query))
+
+    datasets = [
+        DDPDatasetWithRank(
+            dataset,
+            training_args.local_process_index,
+            training_args.world_size,
+            drop=True if training_args.world_size != 1 else False,
+            shuffle=True if training_args.world_size != 1 else False,
         )
-        logger.info(
-            f"load training data for {source} {dataset}. Sample number: {len(datasets[-1])}"
-        )
-    return datasets
+        for dataset in datasets
+    ]
+    dataset = CombinedDataset(datasets)
+
+    return dataset

@@ -8,6 +8,7 @@ from scripts.search import search
 from scripts.utils import get_model
 from scripts.args import ModelArguments, DataTrainingArguments
 
+from datasets import Dataset
 from transformers import HfArgumentParser
 from accelerate import Accelerator
 from beir import util
@@ -86,9 +87,8 @@ def main():
                     }
                 )
 
-        with open(f"data/{dataset}_train.jsonl", "w") as f:
-            for line in data:
-                f.write(json.dumps(line) + "\n")
+        ds = Dataset.from_list(data)
+        ds.save_to_disk(f"data/{dataset}_train")
 
 
 if __name__ == "__main__":

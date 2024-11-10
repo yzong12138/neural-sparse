@@ -63,6 +63,7 @@ class PosNegsDataCollator:
             transformers.AutoTokenizer.from_pretrained(tokenizer_id)
             for tokenizer_id in teacher_tokenizer_ids
         ]
+        logger.info(f"total tokenizers {len(self.tokenizers)}")
 
     def __call__(self, batch):
         q, pos, negs = zip(*batch)
@@ -96,3 +97,6 @@ class PosNegsDataCollator:
                 )
             )
         return result
+
+
+COLLATOR_CLS_MAP = {"kd": KnowledgeDistillDataCollator, "posnegs": PosNegsDataCollator}
