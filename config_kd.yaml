@@ -3,15 +3,16 @@ logging_steps: 50
 
 inf_free: true
 idf_path: multilingual_idf_minagg.json
-model_name_or_path: google-bert/bert-base-multilingual-uncased
-tokenizer_name: google-bert/bert-base-multilingual-uncased
+model_name_or_path: output/baselines/doc-multi-marco-idf/checkpoint-100000
+tokenizer_name: output/baselines/doc-multi-marco-idf/checkpoint-100000
 split_batch: 4
 idf_requires_grad: true
 
 max_seq_length: 256
+train_file_dir: mdata/kd
+data_type: kd
+loss_types: [kldiv]
 beir_dir: data/beir
-training_mode: kd-ensemble
-# train_file: data/msmarco_mixed_scores_v3.json
 sample_num_one_query: 3
 use_in_batch_negatives: true
 flops_d_lambda: 0.02
@@ -20,11 +21,11 @@ ranking_loss_weight: 1
 kd_ensemble_teacher_kwargs:
   types: ["dense"]
   model_ids: ["BAAI/bge-m3"]
+  teacher_tokenizer_ids: ["BAAI/bge-m3"]
   score_scale: 30
-miracl_from_disk: true
-idf_lr: 0.0002
+idf_lr: 0.002
 
-output_dir: output/kd/idf-minagg-2e-4
+output_dir: output/kd/idf-minagg-2e-3-kt
 per_device_eval_batch_size: 50
 per_device_train_batch_size: 12
 
