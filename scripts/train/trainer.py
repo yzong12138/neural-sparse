@@ -71,7 +71,7 @@ class SparseModelTrainer(Trainer):
         return lambda_value * (step / lambda_T) ** 2
 
     def compute_loss(self, model: SparseModel, inputs, return_outputs=False):
-        if hasattr(self, "bi_encoder_teacher"):
+        if hasattr(self, "bi_encoder_teacher") and "scores" not in inputs:
             scores = self.bi_encoder_teacher.get_scores_batch(
                 q_features_list=inputs["query"][1:], d_features_list=inputs["docs"][1:]
             )

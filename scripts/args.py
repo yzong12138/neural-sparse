@@ -35,6 +35,7 @@ class DataTrainingArguments:
         default_factory=dict,
     )
     idf_lr: Optional[float] = field(default=None)
+    save_eval_result: bool = field(default=True)
 
     def __post_init__(self):
         return

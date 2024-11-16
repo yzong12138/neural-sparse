@@ -24,7 +24,10 @@ class KLDivLoss(SparseTrainingLoss):
     def __call__(self, q_rep, d_rep, inputs):
         teacher_scores = inputs["scores"]
 
-        if not self.use_in_batch_negatives:
+        if (
+            not self.use_in_batch_negatives
+            or teacher_scores.shape[1] == d_rep.shape[0] // q_rep.shape[0]
+        ):
             batch_size = q_rep.shape[0]
             d_rep = d_rep.reshape(
                 batch_size, d_rep.shape[0] // batch_size, d_rep.shape[-1]
@@ -53,7 +56,10 @@ class MarginMSELoss(SparseTrainingLoss):
 
     def __call__(self, q_rep, d_rep, inputs):
         teacher_scores = inputs["scores"]
-        if not self.use_in_batch_negatives:
+        if (
+            not self.use_in_batch_negatives
+            or teacher_scores.shape[1] == d_rep.shape[0] // q_rep.shape[0]
+        ):
             batch_size = q_rep.shape[0]
             d_rep = d_rep.reshape(
                 batch_size, d_rep.shape[0] // batch_size, d_rep.shape[-1]
