@@ -3,7 +3,7 @@ import functools
 import logging
 import pickle
 
-from datasets import load_dataset
+from datasets import load_dataset, Dataset, DatasetDict
 
 logger = logging.getLogger(__name__)
 home_path = os.path.expanduser("~")
@@ -29,6 +29,11 @@ def cached(func):
 
 
 def get_corpus(source, dataset):
+    if dataset == "zh":
+        assert source == "miracl"
+        dataset = Dataset.load_from_disk("mdata/miracl-corpus-zh-cn")
+        return dataset
+
     if source == "miracl" or source == "tydi":
         dataset = load_dataset(
             "miracl/miracl-corpus"
@@ -47,11 +52,15 @@ def get_queries(source, dataset):
     query_pos_docs = {}
 
     if source == "miracl" or source == "tydi":
-        datasets = load_dataset(
-            "miracl/miracl" if source == "miracl" else "castorini/mr-tydi",
-            dataset,
-            trust_remote_code=True,
-        )
+        if dataset == "zh":
+            assert source == "miracl"
+            datasets = DatasetDict.load_from_disk("mdata/miracl-zh-cn")
+        else:
+            datasets = load_dataset(
+                "miracl/miracl" if source == "miracl" else "castorini/mr-tydi",
+                dataset,
+                trust_remote_code=True,
+            )
         for key, dataset in datasets.items():
             if key == "dev":
                 continue

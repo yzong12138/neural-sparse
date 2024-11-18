@@ -50,7 +50,7 @@ def main():
                     index_name=dataset,
                     max_length=data_args.max_seq_length,
                     batch_size=25,
-                    result_size=100,
+                    result_size=200,
                     delete=True,
                 )
             )
@@ -79,7 +79,7 @@ def main():
                 data["first_rank"].append(first_rank)
 
             ds = Dataset.from_dict(data)
-            ds.save_to_disk(f"mdata/raw/{source}/{dataset}")
+            ds.save_to_disk(f"mdata/raw-v2/{source}/{dataset}")
 
 
 if __name__ == "__main__":
