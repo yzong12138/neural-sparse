@@ -6,6 +6,7 @@ from ..model.sparse_encoders import SparseModel
 from .bi_encoder_wrapper import BiEncoderWrapper
 from ..utils import gather_rep
 from ..data.dataset import CombinedRandomSampler, CombinedDataset
+from ..args import QRepEnum
 
 from transformers import Trainer
 from transformers.trainer_utils import seed_worker
@@ -38,9 +39,22 @@ class ModelWrapper(torch.nn.Module):
         self.sparse_model.backbone.save_pretrained(output_dir, **kwargs)
         self.sparse_model.tokenizer.save_pretrained(output_dir)
 
-        if self.sparse_model.idf_requires_grad:
+        if self.sparse_model.q_rep_strategy in [
+            QRepEnum.LEARNED_IDF.value,
+            QRepEnum.LEARNED_WEIGHT.value,
+        ]:
+            if self.sparse_model.q_rep_strategy == QRepEnum.LEARNED_IDF.value:
+                idf_vector = self.sparse_model.idf_vector.detach().cpu()
+            else:
+                idf_vector = (
+                    self.sparse_model.token_weighting_model.token_weights.detach().cpu()
+                )
+                torch.save(
+                    self.sparse_model.token_weighting_model,
+                    os.path.join(output_dir, "token_weighting_model.bin"),
+                )
+
             idf_json = dict()
-            idf_vector = self.sparse_model.idf_vector.detach().cpu()
             for idx in idf_vector.nonzero():
                 idf_json[self.sparse_model.tokenizer._convert_id_to_token(idx)] = float(
                     idf_vector[idx]

@@ -1,12 +1,60 @@
 import torch
+import torch.nn as nn
 import transformers
 import itertools
 import logging
 
 from .decomposition_bert import DecompBertConfig, DecompBertForMaskedLM
+from ..args import QRepEnum
 from transformers import AutoModelForMaskedLM, BertForMaskedLM, AutoConfig
 
 logger = logging.getLogger(__name__)
+
+
+class TokenWeightingModel(nn.Module):
+    def __init__(
+        self, backbone, hidden_dim=512, tie_weights=False, parameter_path=None
+    ):
+        super().__init__()
+
+        logger.info(f"{hidden_dim}, {tie_weights}, {parameter_path}")
+
+        origin_embedding = backbone.get_input_embeddings()
+        if tie_weights:
+            self.embedding = origin_embedding
+        else:
+            self.embedding = nn.Embedding(
+                origin_embedding.weight.size(0), origin_embedding.weight.size(1)
+            )
+            self.embedding.weight.data.copy_(
+                origin_embedding.weight.data.detach().clone()
+            )
+
+        self.fc1 = nn.Linear(backbone.config.dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, 1)
+        self.fc1.weight.data.normal_(mean=0.0, std=backbone.config.initializer_range)
+        self.fc2.weight.data.normal_(mean=0.0, std=backbone.config.initializer_range)
+        self.relu = nn.ReLU()
+
+        if parameter_path is not None:
+            state_dict = torch.load(parameter_path)
+            self.load_state_dict(state_dict, strict=True)
+
+        # self.weight_lower_bound = weight_lower_bound
+        # self.weight_upper_bound = weight_upper_bound
+
+    @property
+    def token_weights(self):
+        hidden = self.relu(self.fc1(self.embedding.weight))
+        hidden = self.relu(self.fc2(hidden))
+        weights = hidden.squeeze(-1)
+        weights = weights / (weights.max().detach()/8)
+        return weights
+        # with torch.no_grad():
+        #     min_weight = weights.min()
+        #     max_weight = weights.max()
+
+        # weights = ((weights - min_weight) / (max_weight - min_weight) * 9.9) + 0.1
 
 
 class SparseModel(torch.nn.Module):
@@ -16,7 +64,8 @@ class SparseModel(torch.nn.Module):
         idf=None,
         tokenizer_id=None,
         split_batch=1,
-        idf_requires_grad=False,
+        q_rep_strategy=QRepEnum.IDF.value,
+        twm_args={},
     ):
         super().__init__()
 
@@ -32,17 +81,23 @@ class SparseModel(torch.nn.Module):
             for token in self.tokenizer.special_tokens_map.values()
         ]
 
-        idf_vector = [1.0] * self.tokenizer.vocab_size
-        if idf is not None:
-            logger.info(f"set idf to the model. requires_grad: {idf_requires_grad}")
-            for token, weight in idf.items():
-                _id = self.tokenizer._convert_token_to_id_with_added_voc(token)
-                idf_vector[_id] = weight
-        self.idf_vector = torch.nn.Parameter(
-            torch.tensor(idf_vector), requires_grad=idf_requires_grad
-        )
+        if q_rep_strategy in [QRepEnum.IDF.value, QRepEnum.LEARNED_IDF.value]:
+            idf_vector = [1.0] * self.tokenizer.vocab_size
+            if idf is not None:
+                logger.info(f"set idf to the model. q_rep_strategy : {q_rep_strategy}")
+                for token, weight in idf.items():
+                    _id = self.tokenizer._convert_token_to_id_with_added_voc(token)
+                    idf_vector[_id] = weight
+            self.idf_vector = torch.nn.Parameter(
+                torch.tensor(idf_vector),
+                requires_grad=q_rep_strategy == QRepEnum.LEARNED_IDF.value,
+            )
+        elif q_rep_strategy == QRepEnum.LEARNED_WEIGHT.value:
+            logger.info(f"q_rep_strategy : {q_rep_strategy}")
+            self.token_weighting_model = TokenWeightingModel(self.backbone, **twm_args)
+
         self.split_batch = split_batch
-        self.idf_requires_grad = idf_requires_grad
+        self.q_rep_strategy = q_rep_strategy
 
     def forward(self, inf_free=False, **kwargs):
         # input kwargs is the features from tokenizer
@@ -94,7 +149,11 @@ class SparseModel(torch.nn.Module):
         )
         out[torch.arange(batch_size).unsqueeze(-1), input_ids] = 1
         out[:, self.special_token_ids] = 0
-        return out * torch.relu(self.idf_vector)
+
+        if self.q_rep_strategy == QRepEnum.LEARNED_WEIGHT.value:
+            return out * torch.relu(self.token_weighting_model.token_weights)
+        else:
+            return out * torch.relu(self.idf_vector)
 
 
 class SparsePostProcessor(object):

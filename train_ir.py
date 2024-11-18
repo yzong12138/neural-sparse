@@ -14,7 +14,7 @@ from scripts.data.collator import (
     COLLATOR_CLS_MAP,
 )
 from scripts.utils import set_logging, get_model
-from scripts.args import parse_args
+from scripts.args import parse_args, QRepEnum
 
 from transformers import set_seed
 from transformers.optimization import AdamW, get_linear_schedule_with_warmup
@@ -65,7 +65,7 @@ def main():
         )
 
     # optimizer
-    if model_args.idf_requires_grad == False or data_args.idf_lr is None:
+    if model_args.q_rep_strategy in [QRepEnum.IDF.value, QRepEnum.LEARNED_WEIGHT.value]:
         optimizer = AdamW(
             model.parameters(),
             lr=training_args.learning_rate,

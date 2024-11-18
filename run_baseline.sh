@@ -6,10 +6,10 @@ MAX_STEPS=$(grep "^max_steps:" "$CONFIG_PATH" | sed "s/^max_steps: //")
 N_DEVICES=$(nvidia-smi --query-gpu=gpu_name --format=csv,noheader | wc -l)
 echo $N_DEVICES $OUTPUT_DIR $MAX_STEPS
 
-IDF_REQUIRES_GRAD=$(grep "^idf_requires_grad:" "$CONFIG_PATH" | sed "s/^idf_requires_grad: //")
+Q_REP_STRATEGY=$(grep "^q_rep_strategy:" "$CONFIG_PATH" | sed "s/^q_rep_strategy: //")
 IDF_PATH=$(grep "^idf_path:" "$CONFIG_PATH" | sed "s/^idf_path: //")
 
-if [ "$IDF_REQUIRES_GRAD" = "true" ]; then
+if [ "$Q_REP_STRATEGY" != 0 ]; then
     IDF_PATH="${OUTPUT_DIR}/checkpoint-${MAX_STEPS}/idf.json"
 elif [ -n "$IDF_PATH" ]; then
     IDF_PATH=$IDF_PATH

@@ -57,7 +57,8 @@ def get_model(model_args):
         idf=idf,
         tokenizer_id=model_args.tokenizer_name,
         split_batch=model_args.split_batch,
-        idf_requires_grad=model_args.idf_requires_grad,
+        q_rep_strategy=model_args.q_rep_strategy,
+        twm_args=model_args.twm_args,
     )
 
     return model

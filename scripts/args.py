@@ -4,6 +4,14 @@ import os
 from dataclasses import dataclass, field
 from typing import Optional, Union, List
 from transformers import HfArgumentParser, TrainingArguments
+from enum import Enum
+
+
+class QRepEnum(Enum):
+    IDF = 0
+    LEARNED_IDF = 1
+    LEARNED_WEIGHT = 2
+
 
 beir_datasets = "trec-covid,nfcorpus,nq,hotpotqa,fiqa,arguana,webis-touche2020,dbpedia-entity,scidocs,fever,climate-fever,scifact,quora"
 miracl_datasets = "bn,te,es,fr,id,hi,ru,ar,zh,fa,ja,fi,sw,ko,en"
@@ -47,7 +55,8 @@ class ModelArguments:
     tokenizer_name: Optional[str] = field(default=None)
     idf_path: Optional[str] = field(default=None)
     split_batch: Optional[int] = field(default=1)
-    idf_requires_grad: Optional[bool] = field(default=False)
+    q_rep_strategy: Optional[int] = field(default=QRepEnum.IDF.value)
+    twm_args: Optional[dict] = field(default_factory=dict)
 
     def __post_init__(self):
         if self.tokenizer_name is None:

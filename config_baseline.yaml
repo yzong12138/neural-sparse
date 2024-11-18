@@ -5,6 +5,10 @@ inf_free: true
 model_name_or_path: distilbert/distilbert-base-uncased
 tokenizer_name: distilbert/distilbert-base-uncased
 idf_path: idf.json
+q_rep_strategy: 2
+twm_args:
+  parameter_path: /home/zhichaog/neural-sparse/models/distilbert-twm.pth
+  tie_weights: false
 
 max_seq_length: 256
 train_file: data/msmarco_ft
@@ -16,12 +20,12 @@ flops_d_lambda: 0.04
 flops_d_T: 10000
 ranking_loss_weight: 1
 
-output_dir: output/baselines/doc2
+output_dir: output/baselines/doc-twm-norm8-5w
 per_device_eval_batch_size: 50
-per_device_train_batch_size: 30
+per_device_train_batch_size: 40
 
 log_level: info
-max_steps: 100000
+max_steps: 50000
 fp16: true
 learning_rate: 0.00002
 weight_decay: 0.01
