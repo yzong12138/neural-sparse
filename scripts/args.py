@@ -34,7 +34,7 @@ class DataTrainingArguments:
     kd_ensemble_teacher_kwargs: Optional[Union[dict, str]] = field(
         default_factory=dict,
     )
-    idf_lr: Optional[float] = field(default=None)
+    agg_lr: Optional[float] = field(default=None)
 
     def __post_init__(self):
         return

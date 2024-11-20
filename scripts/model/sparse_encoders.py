@@ -3,8 +3,8 @@ import transformers
 import itertools
 import logging
 
-from .decomposition_bert import DecompBertConfig, DecompBertForMaskedLM
 from transformers import AutoModelForMaskedLM, BertForMaskedLM, AutoConfig
+from .agg_bert import AggBertForMaskedLM
 
 logger = logging.getLogger(__name__)
 
@@ -19,13 +19,9 @@ class SparseModel(torch.nn.Module):
         idf_requires_grad=False,
     ):
         super().__init__()
-
-        AutoConfig.register("DecompBert", DecompBertConfig)
-        AutoModelForMaskedLM.register(DecompBertConfig, DecompBertForMaskedLM)
-
         if tokenizer_id is None:
             tokenizer_id = model_id
-        self.backbone = transformers.AutoModelForMaskedLM.from_pretrained(model_id)
+        self.backbone = AggBertForMaskedLM.from_pretrained(model_id)
         self.tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_id)
         self.special_token_ids = [
             self.tokenizer.vocab[token]
@@ -52,39 +48,10 @@ class SparseModel(torch.nn.Module):
             return self._encode(**kwargs)
 
     def _encode(self, **kwargs):
-        if self.split_batch == 1:
-            output = self.backbone(**kwargs)[0]
-            values, _ = torch.max(
-                output * kwargs.get("attention_mask").unsqueeze(-1), dim=1
-            )
-            values = torch.log(1 + torch.relu(values))
-            return values
-
-        batch_size = kwargs["input_ids"].size(0)
-        split_sizes = [batch_size // self.split_batch] * self.split_batch
-        remainder = batch_size % self.split_batch
-        for i in range(remainder):
-            split_sizes[i] += 1
-
-        outputs = []
-        start = 0
-        assert isinstance(self.backbone, BertForMaskedLM)
-
-        attention_mask = kwargs.get("attention_mask")
-        output = self.backbone.bert(**kwargs)[0]
-        output = self.backbone.cls.predictions.transform(output)
-        for split_size in split_sizes:
-            end = start + split_size
-            values = self.backbone.cls.predictions.decoder(output[start:end])
-            values, _ = torch.max(
-                values * attention_mask[start:end].unsqueeze(-1), dim=1
-            )
-            outputs.append(values)
-            start = end
-
-        output = torch.cat(outputs, dim=0)
-        output = torch.log(1 + torch.relu(output))
-        return output
+        output = self.backbone(**kwargs)[0]
+        values = output[:,0,:] + 10
+        values = torch.log(1 + torch.relu(values))
+        return values
 
     def _encode_inf_free(self, **kwargs):
         input_ids = kwargs.get("input_ids")

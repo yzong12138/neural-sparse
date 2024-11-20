@@ -64,24 +64,14 @@ def main():
             )
         )
 
-    # optimizer
-    if model_args.idf_requires_grad == False or data_args.idf_lr is None:
-        optimizer = AdamW(
-            model.parameters(),
-            lr=training_args.learning_rate,
-            weight_decay=training_args.weight_decay,
-        )
-    else:
-        idf_vector_params = [model.idf_vector]
-        other_params = [
-            param for param in model.parameters() if param is not model.idf_vector
-        ]
-        param_groups = [
-            {"params": idf_vector_params, "lr": data_args.idf_lr},
-            {"params": other_params, "lr": training_args.learning_rate},
-        ]
-        optimizer = AdamW(param_groups, weight_decay=training_args.weight_decay)
-        logger.info(f"idf_vector lr: {data_args.idf_lr}")
+    agg_params = [p for n,p in model.named_parameters() if "customlr" in n]
+    other_params = [p for n,p in model.named_parameters() if "customlr" not in n]
+    param_groups = [
+        {"params": agg_params, "lr": data_args.agg_lr},
+        {"params": other_params, "lr": training_args.learning_rate},
+    ]
+    optimizer = AdamW(param_groups, weight_decay=training_args.weight_decay)
+    logger.info(f"agg lr: {data_args.agg_lr}")
 
     scheduler = get_linear_schedule_with_warmup(
         optimizer=optimizer,

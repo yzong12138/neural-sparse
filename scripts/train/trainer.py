@@ -121,6 +121,10 @@ class SparseModelTrainer(Trainer):
             logger.info(
                 f"Step {self.state.global_step}. ranking loss moving avg:{self.ranking_loss_moving_avg}, d_flops: {d_flops}, flops_loss: {flops_loss} avg doc length: {(d_rep>0).sum()/d_rep.shape[0]}"
             )
+            with torch.no_grad():
+                scores = torch.matmul(q_rep[:1], d_rep[:2].t())
+                logger.info(f"{scores.max()} {scores.mean()} {scores}")
+            
         # DP reduce grad by sum, while DDP reduce grad by mean
         # scale the loss to fix the gap
         loss = loss * self.accelerator.num_processes
