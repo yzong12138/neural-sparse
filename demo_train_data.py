@@ -70,25 +70,27 @@ def main():
         for query, docs in run_res.items():
             if query not in qrels:
                 continue
-            for doc_id in qrels[query]:
-                if doc_id in docs:
-                    docs.pop(doc_id)
-            for positive in list(qrels[query].keys()):
-                data.append(
-                    {
-                        "query": queries[query],
-                        "pos": corpus[positive]["title"]
-                        + " "
-                        + corpus[positive]["text"],
-                        "negs": [
-                            corpus[neg]["title"] + " " + corpus[neg]["text"]
-                            for neg in list(docs.keys())
-                        ],
-                    }
-                )
+            pos_docs = set(qrels[query].keys())
+            docs = list(docs.keys())
+            first_rank = 1000
+            for i,docid in enumerate(docs):
+                if docid in pos_docs:
+                    first_rank = i
+                    break
+
+            data.append(
+                {
+                    "query": queries[query],
+                    "docs": [
+                        corpus[docid]["title"] + " " + corpus[docid]["text"]
+                        for docid in docs
+                    ],
+                    "first_rank": first_rank
+                }
+            )
 
         ds = Dataset.from_list(data)
-        ds.save_to_disk(f"data/{dataset}_train")
+        ds.save_to_disk(f"data/beir-kd/{dataset}")
 
 
 if __name__ == "__main__":
