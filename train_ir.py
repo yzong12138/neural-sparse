@@ -95,6 +95,7 @@ def main():
             cls=data_args.data_type,
             shuffle=False,
             sample_num_one_query=data_args.sample_num_one_query,
+            first_rank_thresh=data_args.first_rank_thresh,
         )
     elif data_args.train_file_dir is not None:
         dataset = load_datasets(
@@ -103,6 +104,7 @@ def main():
             training_args=training_args,
             shuffle=False,
             sample_num_one_query=data_args.sample_num_one_query,
+            first_rank_thresh=data_args.first_rank_thresh,
         )
     else:
         raise ValueError("train_file or train_file_dir must be specified")

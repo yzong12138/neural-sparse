@@ -40,6 +40,7 @@ class DataTrainingArguments:
     drep_auxilary_bias_steps: Optional[int] = field(default=None)
     lelu_alpha: Optional[float] = field(default=None)
     lelu_alpha_steps: Optional[int] = field(default=None)
+    first_rank_thresh: int = field(default=10000)
 
     def __post_init__(self):
         return

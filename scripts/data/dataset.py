@@ -108,7 +108,7 @@ class DDPDatasetWithRank(Dataset):
 
 
 class KnowledgeDistillDataset(Dataset):
-    def __init__(self, all_data, sample_num=2, shuffle=True):
+    def __init__(self, all_data, sample_num=2, shuffle=True, first_rank_thresh=1000):
         """
         Args:
             data: A list of dictionary which have "query", "docs" and "scores" list.
@@ -121,6 +121,10 @@ class KnowledgeDistillDataset(Dataset):
         has_scores = "scores" in all_data[0]
 
         for data in all_data:
+            first_rank = data.get("first_rank", 1)
+            if first_rank < 0 or first_rank > first_rank_thresh:
+                continue
+
             query = data["query"]
             texts = data["docs"]
             if has_scores:
@@ -329,20 +333,34 @@ class CombinedDataset(Dataset):
 DATASET_CLS_MAP = {"kd": KnowledgeDistillDataset, "posnegs": PosNegsDataset}
 
 
-def load_dataset(path, cls, shuffle=False, sample_num_one_query=2):
+def load_dataset(
+    path, cls, shuffle=False, sample_num_one_query=2, first_rank_thresh=1000
+):
     logger.info(f"load dataset from {path}. dataset cls: {DATASET_CLS_MAP[cls]}")
     return DATASET_CLS_MAP[cls](
         DatasetsDataset.load_from_disk(path),
         sample_num=sample_num_one_query,
         shuffle=shuffle,
+        first_rank_thresh=first_rank_thresh,
     )
 
 
-def load_datasets(path, cls, training_args, shuffle=False, sample_num_one_query=2):
+def load_datasets(
+    path,
+    cls,
+    training_args,
+    shuffle=False,
+    sample_num_one_query=2,
+    first_rank_thresh=1000,
+):
     datasets = []
     for dataset in os.listdir(path):
         dataset_path = os.path.join(path, dataset)
-        datasets.append(load_dataset(dataset_path, cls, shuffle, sample_num_one_query))
+        datasets.append(
+            load_dataset(
+                dataset_path, cls, shuffle, sample_num_one_query, first_rank_thresh
+            )
+        )
 
     datasets = [
         DDPDatasetWithRank(
@@ -356,4 +374,5 @@ def load_datasets(path, cls, training_args, shuffle=False, sample_num_one_query=
     ]
     dataset = CombinedDataset(datasets)
 
+    logger.info(f"total data: {len(dataset)}")
     return dataset
