@@ -49,7 +49,7 @@ class SparseModel(torch.nn.Module):
 
     def _encode(self, **kwargs):
         output = self.backbone(**kwargs)[0]
-        values = output[:,0,:] + 10
+        values = output[:, 0, :]
         values = torch.log(1 + torch.relu(values))
         return values
 

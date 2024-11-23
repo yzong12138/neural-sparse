@@ -124,7 +124,7 @@ class SparseModelTrainer(Trainer):
             with torch.no_grad():
                 scores = torch.matmul(q_rep[:1], d_rep[:2].t())
                 logger.info(f"{scores.max()} {scores.mean()} {scores}")
-            
+
         # DP reduce grad by sum, while DDP reduce grad by mean
         # scale the loss to fix the gap
         loss = loss * self.accelerator.num_processes

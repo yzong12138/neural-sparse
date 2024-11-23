@@ -64,8 +64,8 @@ def main():
             )
         )
 
-    agg_params = [p for n,p in model.named_parameters() if "customlr" in n]
-    other_params = [p for n,p in model.named_parameters() if "customlr" not in n]
+    agg_params = [p for n, p in model.named_parameters() if "customlr" in n]
+    other_params = [p for n, p in model.named_parameters() if "customlr" not in n]
     param_groups = [
         {"params": agg_params, "lr": data_args.agg_lr},
         {"params": other_params, "lr": training_args.learning_rate},
