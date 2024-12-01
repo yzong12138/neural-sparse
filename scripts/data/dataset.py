@@ -354,13 +354,27 @@ def load_datasets(
     first_rank_thresh=1000,
 ):
     datasets = []
-    for dataset in os.listdir(path):
-        dataset_path = os.path.join(path, dataset)
-        datasets.append(
-            load_dataset(
-                dataset_path, cls, shuffle, sample_num_one_query, first_rank_thresh
+    if isinstance(path, str):
+        for dataset in os.listdir(path):
+            dataset_path = os.path.join(path, dataset)
+            datasets.append(
+                load_dataset(
+                    dataset_path, cls, shuffle, sample_num_one_query, first_rank_thresh
+                )
             )
-        )
+    else:
+        for path_ in path:
+            for dataset in os.listdir(path_):
+                dataset_path = os.path.join(path_, dataset)
+                datasets.append(
+                    load_dataset(
+                        dataset_path,
+                        cls,
+                        shuffle,
+                        sample_num_one_query,
+                        first_rank_thresh,
+                    )
+                )
 
     datasets = [
         DDPDatasetWithRank(
