@@ -72,10 +72,9 @@ class SparseModel(torch.nn.Module):
 
         attention_mask = kwargs.get("attention_mask")
         output = self.backbone.bert(**kwargs)[0]
-        output = self.backbone.cls.predictions.transform(output)
         for split_size in split_sizes:
             end = start + split_size
-            values = self.backbone.cls.predictions.decoder(output[start:end])
+            values = self.backbone.cls(output[start:end])
             values, _ = torch.max(
                 values * attention_mask[start:end].unsqueeze(-1), dim=1
             )
