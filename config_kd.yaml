@@ -3,8 +3,8 @@ logging_steps: 50
 
 inf_free: true
 idf_path: multilingual_idf_minagg.json
-model_name_or_path: output/baselines/doc-multi-marco-idf/checkpoint-100000
-tokenizer_name: output/baselines/doc-multi-marco-idf/checkpoint-100000
+model_name_or_path: models/uncased-decomp
+tokenizer_name: models/uncased-decomp
 split_batch: 4
 idf_requires_grad: true
 
@@ -25,7 +25,7 @@ kd_ensemble_teacher_kwargs:
   score_scale: 30
 idf_lr: 0.002
 
-output_dir: output/kd/idf-minagg-2e-3-kt
+output_dir: output/kd/decomp
 per_device_eval_batch_size: 50
 per_device_train_batch_size: 12
 
