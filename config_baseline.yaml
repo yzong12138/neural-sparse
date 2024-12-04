@@ -2,7 +2,7 @@ logging_steps: 50
 # log_level_replica: info
 
 inf_free: true
-model_name_or_path: distilbert/distilbert-base-uncased
+model_name_or_path: output/pt/v1-beir-GST/checkpoint-200000
 tokenizer_name: distilbert/distilbert-base-uncased
 idf_path: idf.json
 
@@ -13,15 +13,15 @@ loss_types: [kldiv]
 sample_num_one_query: 2
 use_in_batch_negatives: false
 flops_d_lambda: 0.04
-flops_d_T: 10000
+flops_d_T: 0
 ranking_loss_weight: 1
 
-output_dir: output/baselines/doc2
+output_dir: output/baselines-pt/doc-beir-GST
 per_device_eval_batch_size: 50
-per_device_train_batch_size: 30
+per_device_train_batch_size: 25
 
 log_level: info
-max_steps: 100000
+max_steps: 50000
 fp16: true
 learning_rate: 0.00002
 weight_decay: 0.01
