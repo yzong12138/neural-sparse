@@ -19,13 +19,13 @@ fi
 
 echo "IDF_PATH: $IDF_PATH"
 
-torchrun --nproc_per_node=${N_DEVICES} train_ir.py $CONFIG_PATH
+# torchrun --nproc_per_node=${N_DEVICES} train_ir.py $CONFIG_PATH
 
 for step in {$MAX_STEPS,}
 do
-torchrun --nproc_per_node=${N_DEVICES} evaluate_beir.py \
+torchrun --nproc_per_node=8 evaluate_beir.py \
   --model_name_or_path ${OUTPUT_DIR}/checkpoint-${step} \
-  --inf_free true \
+  --inf_free false \
   --output_dir ${OUTPUT_DIR} \
   --log_level info \
   --per_device_eval_batch_size 50 \

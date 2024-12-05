@@ -39,7 +39,7 @@ class SparseModel(torch.nn.Module):
                 _id = self.tokenizer._convert_token_to_id_with_added_voc(token)
                 idf_vector[_id] = weight
         self.idf_vector = torch.nn.Parameter(
-            torch.tensor(idf_vector), requires_grad=idf_requires_grad
+            torch.tensor(idf_vector)**0.5, requires_grad=idf_requires_grad
         )
         self.split_batch = split_batch
         self.idf_requires_grad = idf_requires_grad
@@ -84,17 +84,10 @@ class SparseModel(torch.nn.Module):
 
         output = torch.cat(outputs, dim=0)
         output = torch.log(1 + torch.relu(output))
-        return output
+        return output*self.idf_vector
 
     def _encode_inf_free(self, **kwargs):
-        input_ids = kwargs.get("input_ids")
-        batch_size = input_ids.shape[0]
-        out = torch.zeros(
-            batch_size, self.tokenizer.vocab_size, device=input_ids.device
-        )
-        out[torch.arange(batch_size).unsqueeze(-1), input_ids] = 1
-        out[:, self.special_token_ids] = 0
-        return out * torch.relu(self.idf_vector)
+        assert 0
 
 
 class SparsePostProcessor(object):

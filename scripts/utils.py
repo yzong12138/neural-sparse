@@ -47,10 +47,8 @@ def set_logging(training_args, log_file_name):
 
 
 def get_model(model_args):
-    idf = None
-    if model_args.inf_free and model_args.idf_path:
-        with open(model_args.idf_path) as f:
-            idf = json.load(f)
+    with open(model_args.idf_path) as f:
+        idf = json.load(f)
 
     model = SparseModel(
         model_args.model_name_or_path,
