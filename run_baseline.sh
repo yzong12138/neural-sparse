@@ -23,7 +23,7 @@ echo "IDF_PATH: $IDF_PATH"
 
 for step in {$MAX_STEPS,}
 do
-torchrun --nproc_per_node=8 evaluate_beir.py \
+torchrun --nproc_per_node=1 evaluate_beir.py \
   --model_name_or_path ${OUTPUT_DIR}/checkpoint-${step} \
   --inf_free false \
   --output_dir ${OUTPUT_DIR} \

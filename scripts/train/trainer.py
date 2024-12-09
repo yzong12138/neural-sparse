@@ -61,6 +61,7 @@ class SparseModelTrainer(Trainer):
     def flops_value(self, representation, group_num=1):
         # representation size: (ndevice * batch_size) * vocab_dim
         # group num: how many semantic similar documents representations in one batch
+        representation = representation / self.accelerator.unwrap_model(self.model).sparse_model.idf_vector
         representation = representation.reshape(-1, group_num, representation.shape[-1])
         return torch.sum(torch.mean(torch.abs(representation), dim=0) ** 2)
 

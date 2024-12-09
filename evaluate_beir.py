@@ -97,50 +97,50 @@ def main():
             split="test"
         )
 
-        asyncio.run(
-            ingest(
-                dataset=BEIRCorpusDataset(corpus=corpus),
-                model=model,
-                out_dir=beir_eval_dir,
-                index_name=dataset,
-                accelerator=accelerator,
-                max_length=data_args.max_seq_length,
-                batch_size=training_args.per_device_eval_batch_size,
-            )
-        )
+        # asyncio.run(
+        #     ingest(
+        #         dataset=BEIRCorpusDataset(corpus=corpus),
+        #         model=model,
+        #         out_dir=beir_eval_dir,
+        #         index_name=dataset,
+        #         accelerator=accelerator,
+        #         max_length=data_args.max_seq_length,
+        #         batch_size=training_args.per_device_eval_batch_size,
+        #     )
+        # )
 
         # search is only run on main process
-    #     if accelerator.is_local_main_process:
-    #         search_result = asyncio.run(
-    #             search(
-    #                 queries=queries,
-    #                 model=model,
-    #                 out_dir=beir_eval_dir,
-    #                 index_name=dataset,
-    #                 max_length=data_args.max_seq_length,
-    #                 batch_size=training_args.per_device_eval_batch_size,
-    #                 inf_free=model_args.inf_free,
-    #             )
-    #         )
+        if accelerator.is_local_main_process:
+            search_result = asyncio.run(
+                search(
+                    queries=queries,
+                    model=model,
+                    out_dir=beir_eval_dir,
+                    index_name=dataset,
+                    max_length=data_args.max_seq_length,
+                    batch_size=training_args.per_device_eval_batch_size,
+                    inf_free=model_args.inf_free,
+                )
+            )
 
-    #         ndcg, map_, recall, p = EvaluateRetrieval.evaluate(
-    #             qrels, search_result["run_res"], [1, 10]
-    #         )
-    #         logger.info(f"retrieve metrics for {dataset}: {ndcg, map_, recall, p}")
-    #         result["NDCG@10"].append(ndcg["NDCG@10"])
-    #         result["flops"].append(search_result["flops"])
-    #         result["q_length"].append(search_result["q_length"])
-    #         result["d_length"].append(search_result["d_length"])
+            ndcg, map_, recall, p = EvaluateRetrieval.evaluate(
+                qrels, search_result["run_res"], [1, 10]
+            )
+            logger.info(f"retrieve metrics for {dataset}: {ndcg, map_, recall, p}")
+            result["NDCG@10"].append(ndcg["NDCG@10"])
+            result["flops"].append(search_result["flops"])
+            result["q_length"].append(search_result["q_length"])
+            result["d_length"].append(search_result["d_length"])
 
-    #     accelerator.wait_for_everyone()
+        accelerator.wait_for_everyone()
 
-    # if accelerator.is_local_main_process:
-    #     df = pd.DataFrame(result)
-    #     for key in ["flops", "q_length", "d_length", "NDCG@10"]:
-    #         avg_res[key] = sum(result[key]) / len(result[key])
-    #     df.to_csv(os.path.join(beir_eval_dir, "beir_statictics.csv"))
-    #     with open(os.path.join(beir_eval_dir, "avg_res.json"), "w") as f:
-    #         json.dump(avg_res, f)
+    if accelerator.is_local_main_process:
+        df = pd.DataFrame(result)
+        for key in ["flops", "q_length", "d_length", "NDCG@10"]:
+            avg_res[key] = sum(result[key]) / len(result[key])
+        df.to_csv(os.path.join(beir_eval_dir, "beir_statictics.csv"))
+        with open(os.path.join(beir_eval_dir, "avg_res.json"), "w") as f:
+            json.dump(avg_res, f)
 
 
 if __name__ == "__main__":

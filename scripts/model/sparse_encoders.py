@@ -84,7 +84,7 @@ class SparseModel(torch.nn.Module):
 
         output = torch.cat(outputs, dim=0)
         output = torch.log(1 + torch.relu(output))
-        return output*self.idf_vector
+        return output
 
     def _encode_inf_free(self, **kwargs):
         assert 0
