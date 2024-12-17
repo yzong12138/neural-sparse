@@ -24,8 +24,10 @@ kd_ensemble_teacher_kwargs:
   teacher_tokenizer_ids: ["BAAI/bge-m3"]
   score_scale: 30
 idf_lr: 0.002
+drep_auxilary_bias: 1.0
+drep_auxilary_bias_steps: 30000
 
-output_dir: output/kd/idf-minagg-2e-3-kt
+output_dir: output/kd/idf-auxibias-1.0-fix
 per_device_eval_batch_size: 50
 per_device_train_batch_size: 12
 

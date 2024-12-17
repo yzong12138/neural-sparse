@@ -1,6 +1,7 @@
 import os
 import logging
 import torch
+import math
 
 from ..model.sparse_encoders import SparseModel
 from .bi_encoder_wrapper import BiEncoderWrapper
@@ -87,12 +88,43 @@ class SparseModelTrainer(Trainer):
             "attention_mask": inputs["docs"][0]["attention_mask"],
         }
 
+        bias = 0
+        if self.data_args.drep_auxilary_bias is not None:
+            assert self.data_args.drep_auxilary_bias_steps is not None
+            bias = (
+                0
+                if self.state.global_step >= self.data_args.drep_auxilary_bias_steps
+                else self.data_args.drep_auxilary_bias
+                * (
+                    1
+                    - (self.state.global_step / self.data_args.drep_auxilary_bias_steps)
+                )
+            )
+            self.accelerator.unwrap_model(self.model).sparse_model.d_bias = bias
+
+        lelu_alpha = 0
+        if self.data_args.lelu_alpha is not None:
+            assert self.data_args.lelu_alpha_steps is not None
+            lelu_alpha = (
+                0
+                if self.state.global_step >= self.data_args.lelu_alpha_steps
+                else self.data_args.lelu_alpha
+                * (1 - (self.state.global_step / self.data_args.lelu_alpha_steps))
+            )
+            self.accelerator.unwrap_model(
+                self.model
+            ).sparse_model.lelu_alpha = lelu_alpha
+
         d_rep, q_rep = model(model_wrapper_input)
+
         d_rep = gather_rep(d_rep, self.accelerator)
         q_rep = gather_rep(q_rep, self.accelerator)
         if "scores" in inputs:
             inputs["scores"] = gather_rep(inputs["scores"], self.accelerator)
-        d_flops = self.flops_value(d_rep, d_rep.shape[0] // q_rep.shape[0])
+        d_flops = self.flops_value(
+            torch.relu(d_rep - bias - math.log(1 + lelu_alpha)),
+            d_rep.shape[0] // q_rep.shape[0],
+        )
         flops_loss += d_flops * self.get_lambda(
             self.data_args.flops_d_lambda, self.data_args.flops_d_T
         )
@@ -124,7 +156,7 @@ class SparseModelTrainer(Trainer):
             with torch.no_grad():
                 nonzero = d_rep[d_rep > 0]
                 logger.info(
-                    f"nonzero entries: {torch.quantile(nonzero, torch.tensor([50,90,99]))}"
+                    f"bias: {bias}, lelu_alpha: {lelu_alpha}, nonzero entries: {torch.mean(nonzero)} {torch.max(nonzero)} flops doc length: {((d_rep - bias - math.log(1 + lelu_alpha))>0).sum()/d_rep.shape[0]}"
                 )
         # DP reduce grad by sum, while DDP reduce grad by mean
         # scale the loss to fix the gap
