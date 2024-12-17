@@ -43,6 +43,7 @@ class SparseModel(torch.nn.Module):
         )
         self.split_batch = split_batch
         self.idf_requires_grad = idf_requires_grad
+        self.d_bias = 0
 
     def forward(self, inf_free=False, **kwargs):
         # input kwargs is the features from tokenizer
@@ -54,6 +55,7 @@ class SparseModel(torch.nn.Module):
     def _encode(self, **kwargs):
         if self.split_batch == 1:
             output = self.backbone(**kwargs)[0]
+            output += self.d_bias
             values, _ = torch.max(
                 output * kwargs.get("attention_mask").unsqueeze(-1), dim=1
             )
@@ -75,6 +77,7 @@ class SparseModel(torch.nn.Module):
         for split_size in split_sizes:
             end = start + split_size
             values = self.backbone.cls(output[start:end])
+            values += self.d_bias
             values, _ = torch.max(
                 values * attention_mask[start:end].unsqueeze(-1), dim=1
             )

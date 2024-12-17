@@ -36,6 +36,8 @@ class DataTrainingArguments:
     )
     idf_lr: Optional[float] = field(default=None)
     save_eval_result: bool = field(default=True)
+    drep_auxilary_bias: Optional[float] = field(default=None)
+    drep_auxilary_bias_steps: Optional[int] = field(default=None)
 
     def __post_init__(self):
         return
