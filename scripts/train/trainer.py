@@ -1,6 +1,7 @@
 import os
 import logging
 import torch
+import math
 
 from ..model.sparse_encoders import SparseModel
 from .bi_encoder_wrapper import BiEncoderWrapper
@@ -101,6 +102,19 @@ class SparseModelTrainer(Trainer):
             )
             self.accelerator.unwrap_model(self.model).sparse_model.d_bias = bias
 
+        lelu_alpha = 0
+        if self.data_args.lelu_alpha is not None:
+            assert self.data_args.lelu_alpha_steps is not None
+            lelu_alpha = (
+                0
+                if self.state.global_step >= self.data_args.lelu_alpha_steps
+                else self.data_args.lelu_alpha
+                * (1 - (self.state.global_step / self.data_args.lelu_alpha_steps))
+            )
+            self.accelerator.unwrap_model(
+                self.model
+            ).sparse_model.lelu_alpha = lelu_alpha
+
         d_rep, q_rep = model(model_wrapper_input)
 
         d_rep = gather_rep(d_rep, self.accelerator)
@@ -108,7 +122,8 @@ class SparseModelTrainer(Trainer):
         if "scores" in inputs:
             inputs["scores"] = gather_rep(inputs["scores"], self.accelerator)
         d_flops = self.flops_value(
-            torch.relu(d_rep - bias), d_rep.shape[0] // q_rep.shape[0]
+            torch.relu(d_rep - bias - math.log(1 + lelu_alpha)),
+            d_rep.shape[0] // q_rep.shape[0],
         )
         flops_loss += d_flops * self.get_lambda(
             self.data_args.flops_d_lambda, self.data_args.flops_d_T
@@ -141,7 +156,7 @@ class SparseModelTrainer(Trainer):
             with torch.no_grad():
                 nonzero = d_rep[d_rep > 0]
                 logger.info(
-                    f"bias: {bias}, nonzero entries: {torch.mean(nonzero)} {torch.max(nonzero)}"
+                    f"bias: {bias}, lelu_alpha: {lelu_alpha}, nonzero entries: {torch.mean(nonzero)} {torch.max(nonzero)} flops doc length: {((d_rep - bias - math.log(1 + lelu_alpha))>0).sum()/d_rep.shape[0]}"
                 )
         # DP reduce grad by sum, while DDP reduce grad by mean
         # scale the loss to fix the gap
