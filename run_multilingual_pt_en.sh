@@ -1,6 +1,7 @@
 set -e
 
-CONFIG_PATH='config_multilingual_pt.yaml';
+# CONFIG_PATH='config_multilingual_pt.yaml';
+CONFIG_PATH='config_multilingual_marco.yaml';
 OUTPUT_DIR=$(grep "^output_dir:" "$CONFIG_PATH" | sed "s/^output_dir: //")
 MAX_STEPS=$(grep "^max_steps:" "$CONFIG_PATH" | sed "s/^max_steps: //")
 N_DEVICES=$(nvidia-smi --query-gpu=gpu_name --format=csv,noheader | wc -l)

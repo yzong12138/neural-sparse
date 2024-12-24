@@ -3,8 +3,8 @@ logging_steps: 50
 split_batch: 5
 
 inf_free: true
-model_name_or_path: google-bert/bert-base-multilingual-uncased
-tokenizer_name: google-bert/bert-base-multilingual-uncased
+model_name_or_path: output/pt/multilingual-en-pt/checkpoint-200000
+tokenizer_name: output/pt/multilingual-en-pt/checkpoint-200000
 idf_path: multilingual_idf_minagg.json
 
 max_seq_length: 256
@@ -17,12 +17,12 @@ flops_d_lambda: 0.005
 flops_d_T: 10000
 ranking_loss_weight: 1
 
-output_dir: output/baselines/doc-multi-marco-idf
+output_dir: output/baselines/en-pt-and-marco
 per_device_eval_batch_size: 50
 per_device_train_batch_size: 20
 
 log_level: info
-max_steps: 100000
+max_steps: 50000
 fp16: true
 learning_rate: 0.00002
 weight_decay: 0.01

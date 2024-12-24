@@ -1,13 +1,13 @@
 logging_steps: 50
 # log_level_replica: info
-split_batch: 6
+split_batch: 5
 
 inf_free: true
 model_name_or_path: google-bert/bert-base-multilingual-uncased
 tokenizer_name: google-bert/bert-base-multilingual-uncased
 idf_path: multilingual_idf_minagg.json
 
-max_seq_length: 256
+max_seq_length: 200
 train_file_dir: [data/pt-kd,data/beir-kd]
 data_type: kd
 loss_types: [kldiv]
