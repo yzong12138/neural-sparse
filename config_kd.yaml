@@ -26,8 +26,9 @@ kd_ensemble_teacher_kwargs:
 idf_lr: 0.002
 lelu_alpha: 1.0
 lelu_alpha_steps: 20000
+max_docs_per_query: 80
 
-output_dir: output/kd/kd-v2-dedup
+output_dir: output/kd/kd-v2-dedup-top80
 per_device_eval_batch_size: 50
 per_device_train_batch_size: 12
 

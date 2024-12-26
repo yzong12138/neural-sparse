@@ -108,14 +108,23 @@ class DDPDatasetWithRank(Dataset):
 
 
 class KnowledgeDistillDataset(Dataset):
-    def __init__(self, all_data, sample_num=2, shuffle=True, first_rank_thresh=1000):
+    def __init__(
+        self,
+        all_data,
+        sample_num=2,
+        shuffle=True,
+        first_rank_thresh=1000,
+        max_docs_per_query=1000,
+    ):
         """
         Args:
             data: A list of dictionary which have "query", "docs" and "scores" list.
                 An example: {"query":"hi","docs":["hello","hi"],"scores":[0.99,1]}
         """
         self.data = []
-        logger.info(f"KnowledgeDistillDataset input data number: {len(all_data)}")
+        logger.info(
+            f"KnowledgeDistillDataset input data number: {len(all_data)} {first_rank_thresh} {max_docs_per_query}"
+        )
         assert sample_num >= 2
 
         has_scores = "scores" in all_data[0]
@@ -126,9 +135,9 @@ class KnowledgeDistillDataset(Dataset):
                 continue
 
             query = data["query"]
-            texts = data["docs"]
+            texts = data["docs"][:max_docs_per_query]
             if has_scores:
-                scores = data["scores"]
+                scores = data["scores"][:max_docs_per_query]
                 assert len(texts) == len(scores)
             else:
                 scores = [None] * len(texts)
@@ -334,7 +343,12 @@ DATASET_CLS_MAP = {"kd": KnowledgeDistillDataset, "posnegs": PosNegsDataset}
 
 
 def load_dataset(
-    path, cls, shuffle=False, sample_num_one_query=2, first_rank_thresh=1000
+    path,
+    cls,
+    shuffle=False,
+    sample_num_one_query=2,
+    first_rank_thresh=1000,
+    max_docs_per_query=1000,
 ):
     logger.info(f"load dataset from {path}. dataset cls: {DATASET_CLS_MAP[cls]}")
     return DATASET_CLS_MAP[cls](
@@ -342,6 +356,7 @@ def load_dataset(
         sample_num=sample_num_one_query,
         shuffle=shuffle,
         first_rank_thresh=first_rank_thresh,
+        max_docs_per_query=max_docs_per_query,
     )
 
 
