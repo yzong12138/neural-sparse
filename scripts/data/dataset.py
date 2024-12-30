@@ -367,6 +367,7 @@ def load_datasets(
     shuffle=False,
     sample_num_one_query=2,
     first_rank_thresh=1000,
+    max_docs_per_query=1000,
 ):
     datasets = []
     if isinstance(path, str):
@@ -374,7 +375,12 @@ def load_datasets(
             dataset_path = os.path.join(path, dataset)
             datasets.append(
                 load_dataset(
-                    dataset_path, cls, shuffle, sample_num_one_query, first_rank_thresh
+                    dataset_path,
+                    cls,
+                    shuffle,
+                    sample_num_one_query,
+                    first_rank_thresh,
+                    max_docs_per_query,
                 )
             )
     else:
@@ -388,6 +394,7 @@ def load_datasets(
                         shuffle,
                         sample_num_one_query,
                         first_rank_thresh,
+                        max_docs_per_query,
                     )
                 )
 

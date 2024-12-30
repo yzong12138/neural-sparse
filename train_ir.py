@@ -96,6 +96,7 @@ def main():
             shuffle=False,
             sample_num_one_query=data_args.sample_num_one_query,
             first_rank_thresh=data_args.first_rank_thresh,
+            max_docs_per_query=data_args.max_docs_per_query,
         )
     elif data_args.train_file_dir is not None:
         dataset = load_datasets(
@@ -105,6 +106,7 @@ def main():
             shuffle=False,
             sample_num_one_query=data_args.sample_num_one_query,
             first_rank_thresh=data_args.first_rank_thresh,
+            max_docs_per_query=data_args.max_docs_per_query,
         )
     else:
         raise ValueError("train_file or train_file_dir must be specified")
