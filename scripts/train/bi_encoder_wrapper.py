@@ -3,6 +3,9 @@ import torch.nn.functional as F
 import transformers
 from scripts.utils import gather_rep
 from huggingface_hub import hf_hub_download
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class SparseModel(torch.nn.Module):
@@ -156,103 +159,58 @@ class BiEncoderWrapper:
             model.eval()
             self.models.append(model)
 
-    def get_scores(self, q_features, d_features):
-        scores = 0
-        with torch.no_grad():
-            for model in self.models:
-                if not isinstance(model, BGEM3Model):
-                    q_rep = model(**q_features)
-                    d_rep = model(**d_features)
-                    if not self.use_in_batch_negatives:
-                        d_rep = d_rep.reshape(q_rep.shape[0], -1, d_rep.shape[-1])
-                        score = torch.bmm(
-                            d_rep, q_rep.reshape(q_rep.shape[0], q_rep.shape[-1], 1)
-                        ).squeeze()
-                    else:
-                        d_rep = gather_rep(d_rep, self.accelerator)
-                        score = torch.matmul(q_rep, d_rep.t())
-                else:
-                    q_rep_dense, q_rep_sparse, q_rep_colbert = model(**q_features)
-                    d_rep_dense, d_rep_sparse, d_rep_colbert = model(**d_features)
-                    if self.use_in_batch_negatives:
-                        d_rep_dense = gather_rep(d_rep_dense, self.accelerator)
-                        d_rep_sparse = gather_rep(d_rep_sparse, self.accelerator)
-                        d_rep_colbert = gather_rep(d_rep_colbert, self.accelerator)
-                        score_dense = torch.matmul(q_rep_dense, d_rep_dense.t())
-                        score_sparse = torch.matmul(q_rep_sparse, d_rep_sparse.t())
-
-                        token_scores = torch.einsum(
-                            "qin,pjn->qipj", q_rep_colbert, d_rep_colbert
-                        )
-                        score_colbert, _ = token_scores.max(-1)
-                        score_colbert = score_colbert.sum(1) / q_features[
-                            "attention_mask"
-                        ][:, 1:].sum(-1, keepdim=True)
-
-                        score = score_dense + score_colbert + 0.3 * score_sparse
-                    else:
-                        raise NotImplementedError
-
-                max_t = score.max(dim=1).values
-                min_t = score.min(dim=1).values
-                score = (score - min_t.unsqueeze(-1)) / (
-                    (max_t - min_t + 1e-6).unsqueeze(-1)
-                )
-                scores += score
-
-            scores = scores / len(self.models)
-
-        return scores * self.score_scale
-
+    @torch.no_grad()
     def get_scores_batch(self, q_features_list, d_features_list):
         assert len(q_features_list) == len(self.models)
         scores = 0
-        with torch.no_grad():
-            for i, model in enumerate(self.models):
-                if not isinstance(self.accelerator.unwrap_model(model), BGEM3Model):
-                    q_rep = model(**q_features_list[i])
-                    d_rep = model(**d_features_list[i])
-                    if not self.use_in_batch_negatives:
-                        d_rep = d_rep.reshape(q_rep.shape[0], -1, d_rep.shape[-1])
-                        score = torch.bmm(
-                            d_rep, q_rep.reshape(q_rep.shape[0], q_rep.shape[-1], 1)
-                        ).squeeze()
-                    else:
-                        d_rep = gather_rep(d_rep, self.accelerator)
-                        score = torch.matmul(q_rep, d_rep.t())
+
+        for i, model in enumerate(self.models):
+            if not isinstance(self.accelerator.unwrap_model(model), BGEM3Model):
+                q_rep = model(**q_features_list[i])
+                d_rep = model(**d_features_list[i])
+                if not self.use_in_batch_negatives:
+                    d_rep = d_rep.reshape(q_rep.shape[0], -1, d_rep.shape[-1])
+                    score = torch.bmm(
+                        d_rep, q_rep.reshape(q_rep.shape[0], q_rep.shape[-1], 1)
+                    ).squeeze()
                 else:
-                    q_rep_dense, q_rep_sparse, q_rep_colbert = model(
-                        **q_features_list[i]
+                    d_rep = gather_rep(d_rep, self.accelerator)
+                    score = torch.matmul(q_rep, d_rep.t())
+            else:
+                q_rep_dense, q_rep_sparse, q_rep_colbert = model(**q_features_list[i])
+                d_rep_dense, d_rep_sparse, d_rep_colbert = model(**d_features_list[i])
+                if self.use_in_batch_negatives:
+                    L = d_rep_colbert.shape[1]
+                    seq_length = torch.tensor([L], device=d_rep_colbert.device)
+                    seq_length = self.accelerator.gather(seq_length)
+                    max_seq_length = seq_length.max().item()
+                    padding_size = (0, 0, 0, max_seq_length - L, 0, 0)
+                    d_rep_colbert = F.pad(d_rep_colbert, padding_size)
+                    d_rep_colbert = self.accelerator.gather(d_rep_colbert)
+                    d_rep_dense = self.accelerator.gather(d_rep_dense)
+                    d_rep_sparse = self.accelerator.gather(d_rep_sparse)
+
+                    score_dense = torch.matmul(q_rep_dense, d_rep_dense.t())
+                    score_sparse = torch.matmul(q_rep_sparse, d_rep_sparse.t())
+
+                    token_scores = torch.einsum(
+                        "qin,pjn->qipj", q_rep_colbert, d_rep_colbert
                     )
-                    d_rep_dense, d_rep_sparse, d_rep_colbert = model(
-                        **d_features_list[i]
-                    )
-                    if self.use_in_batch_negatives:
-                        d_rep_dense = gather_rep(d_rep_dense, self.accelerator)
-                        d_rep_sparse = gather_rep(d_rep_sparse, self.accelerator)
-                        d_rep_colbert = gather_rep(d_rep_colbert, self.accelerator)
-                        score_dense = torch.matmul(q_rep_dense, d_rep_dense.t())
-                        score_sparse = torch.matmul(q_rep_sparse, d_rep_sparse.t())
+                    score_colbert, _ = token_scores.max(-1)
+                    score_colbert = score_colbert.sum(1) / q_features_list[i][
+                        "attention_mask"
+                    ][:, 1:].sum(-1, keepdim=True)
 
-                        token_scores = torch.einsum(
-                            "qin,pjn->qipj", q_rep_colbert, d_rep_colbert
-                        )
-                        score_colbert, _ = token_scores.max(-1)
-                        score_colbert = score_colbert.sum(1) / q_features_list[i][
-                            "attention_mask"
-                        ][:, 1:].sum(-1, keepdim=True)
+                    score = score_dense + score_colbert + 0.3 * score_sparse
+                else:
+                    raise NotImplementedError
 
-                        score = score_dense + score_colbert + 0.3 * score_sparse
-                    else:
-                        raise NotImplementedError
+            max_t = score.max(dim=1).values
+            min_t = score.min(dim=1).values
+            score = (score - min_t.unsqueeze(-1)) / (
+                (max_t - min_t + 1e-6).unsqueeze(-1)
+            )
+            scores += score
 
-                max_t = score.max(dim=1).values
-                min_t = score.min(dim=1).values
-                score = (score - min_t.unsqueeze(-1)) / (
-                    (max_t - min_t + 1e-6).unsqueeze(-1)
-                )
-                scores += score
-
-            scores = scores / len(self.models)
-
+        scores = scores / len(self.models)
         return scores * self.score_scale
