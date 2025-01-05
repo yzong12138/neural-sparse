@@ -9,13 +9,13 @@ split_batch: 6
 idf_requires_grad: true
 
 max_seq_length: 256
-train_file_dir: mdata/kd-v2-dedup
+train_file_dir: mdata/kd-v2-dedup-0.005
 data_type: kd
 loss_types: [kldiv]
 beir_dir: data/beir
 sample_num_one_query: 3
 use_in_batch_negatives: true
-flops_d_lambda: 0.015
+flops_d_lambda: 0.005
 flops_d_T: 10000
 ranking_loss_weight: 1
 kd_ensemble_teacher_kwargs:
