@@ -2,13 +2,22 @@
 
 ### Conda environment
 ```
-conda create -n neural-sparse python=3.9
-conda activate neural-sparse
-conda install pytorch==1.11.0 cudatoolkit=10.2 -c pytorch
-conda install numpy
-conda install -c conda-forge accelerate transformers datasets
+conda create -n mdbert python=3.9
+conda activate mdbert
+pip install git+https://github.com/huggingface/transformers.git
+conda install pytorch==2.4.0 pytorch-cuda=12.4 -c pytorch -c nvidia
+pip install torch==2.4.0 --index-url https://download.pytorch.org/whl/cu121
 pip install opensearch-py beir
+conda install -c conda-forge accelerate 
+
+
+mdbert
+pip install torch==2.5.0 --index-url https://download.pytorch.org/whl/cu121
+pip install transformers==4.44.1 datasets accelerate opensearch-py beir
+pip install "flash_attn==2.6.3" --no-build-isolation
 ```
+
+
 
 ### OpenSearch service
 To evaluate search relevance or mine hard negatives, run an OpenSearch node at local device. It can be accessed at `http://localhost:9200` without username/password(security disabled). For more details, please check [OpenSearch doc](https://opensearch.org/docs/latest/install-and-configure/install-opensearch/tar/). Here are steps to start a node without security:

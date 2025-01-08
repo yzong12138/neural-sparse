@@ -3,8 +3,9 @@ import transformers
 import itertools
 import logging
 
-from .decomposition_bert import DecompBertConfig, DecompBertForMaskedLM
 from transformers import AutoModelForMaskedLM, BertForMaskedLM, AutoConfig
+from .modernbert.modeling_modernbert import ModernBertForMaskedLM
+from .modernbert.configuration_modernbert import ModernBertConfig
 
 logger = logging.getLogger(__name__)
 
@@ -20,19 +21,22 @@ class SparseModel(torch.nn.Module):
     ):
         super().__init__()
 
-        AutoConfig.register("DecompBert", DecompBertConfig)
-        AutoModelForMaskedLM.register(DecompBertConfig, DecompBertForMaskedLM)
+        AutoConfig.register("modernbert", ModernBertConfig)
+        AutoModelForMaskedLM.register(ModernBertConfig, ModernBertForMaskedLM)
 
         if tokenizer_id is None:
             tokenizer_id = model_id
-        self.backbone = transformers.AutoModelForMaskedLM.from_pretrained(model_id)
+        self.backbone = transformers.AutoModelForMaskedLM.from_pretrained(
+            model_id, reference_compile=False
+        )
         self.tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_id)
         self.special_token_ids = [
             self.tokenizer.vocab[token]
             for token in self.tokenizer.special_tokens_map.values()
         ]
+        logger.info(self.special_token_ids)
 
-        idf_vector = [1.0] * self.tokenizer.vocab_size
+        idf_vector = [1.0] * len(self.tokenizer.vocab)
         if idf is not None:
             logger.info(f"set idf to the model. requires_grad: {idf_requires_grad}")
             for token, weight in idf.items():
@@ -90,7 +94,7 @@ class SparseModel(torch.nn.Module):
         input_ids = kwargs.get("input_ids")
         batch_size = input_ids.shape[0]
         out = torch.zeros(
-            batch_size, self.tokenizer.vocab_size, device=input_ids.device
+            batch_size, len(self.tokenizer.vocab), device=input_ids.device
         )
         out[torch.arange(batch_size).unsqueeze(-1), input_ids] = 1
         out[:, self.special_token_ids] = 0
@@ -100,7 +104,7 @@ class SparseModel(torch.nn.Module):
 class SparsePostProcessor(object):
     def __init__(self, tokenizer):
         self.tokenizer = tokenizer
-        self.id_to_token = ["" for i in range(tokenizer.vocab_size)]
+        self.id_to_token = ["" for i in range(len(tokenizer.vocab))]
         for token, _id in tokenizer.vocab.items():
             self.id_to_token[_id] = token
 
@@ -128,10 +132,10 @@ class SparseEncoder:
         self.do_count = do_count
         self.max_length = max_length
         self.device = self.model.backbone.device
-        self.count_tensor = torch.zeros(self.tokenizer.vocab_size).to(self.device)
+        self.count_tensor = torch.zeros(len(self.tokenizer.vocab)).to(self.device)
 
     def reset_count(self):
-        self.count_tensor = torch.zeros(self.tokenizer.vocab_size).to(self.device)
+        self.count_tensor = torch.zeros(len(self.tokenizer.vocab)).to(self.device)
 
     def encode(self, texts, inf_free=False):
         features = self.tokenizer(

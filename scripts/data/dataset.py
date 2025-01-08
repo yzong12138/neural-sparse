@@ -8,8 +8,6 @@ from ..utils import is_ddp_enabled
 from itertools import chain
 from tqdm import tqdm
 from datasets import load_dataset, Dataset as DatasetsDataset
-from beir import util
-from beir.datasets.data_loader import GenericDataLoader
 from torch.utils.data import Dataset
 from torch.utils.data.dataloader import DataLoader, Sampler, RandomSampler, BatchSampler
 
@@ -184,6 +182,9 @@ class MsMarcoKDDataset(KnowledgeDistillDataset):
         if corpus is None or queries is None:
             assert score_dic_path is not None
             beir_resource_url = f"https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/msmarco.zip"
+            from beir import util
+            from beir.datasets.data_loader import GenericDataLoader
+
             local_data_path = util.download_and_unzip(beir_resource_url, "data/beir/")
             corpus, queries, qrels = GenericDataLoader(
                 data_folder=local_data_path
