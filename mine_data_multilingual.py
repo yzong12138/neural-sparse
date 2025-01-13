@@ -1,6 +1,8 @@
 import os
 import json
+import sys
 import asyncio
+import logging
 
 from scripts.data.dataset import BEIRCorpusDataset, MiraclCorpusDataset
 from scripts.data.data_utils import get_corpus, get_queries
@@ -15,6 +17,15 @@ from datasets import load_dataset, Dataset
 
 
 def main():
+    logging.basicConfig(
+        level=20,
+        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+        datefmt="%m/%d/%Y %H:%M:%S",
+        handlers=[
+            logging.StreamHandler(sys.stdout),
+        ],
+    )
+
     parser = HfArgumentParser((ModelArguments, DataTrainingArguments, MiningArguments))
 
     model_args, data_args, mine_args = parser.parse_args_into_dataclasses()
@@ -79,7 +90,7 @@ def main():
                 data["first_rank"].append(first_rank)
 
             ds = Dataset.from_dict(data)
-            ds.save_to_disk(f"mdata/raw-v2/{source}/{dataset}")
+            ds.save_to_disk(f"mdata/raw-v3/{source}/{dataset}")
 
 
 if __name__ == "__main__":

@@ -11,6 +11,8 @@ import torch.distributed as dist
 from opensearchpy import OpenSearch
 from .model.sparse_encoders import SparseModel
 
+logger = logging.getLogger(__name__)
+
 
 def gather_rep(rep, accelerator):
     if accelerator.num_processes == 1:
@@ -49,8 +51,11 @@ def set_logging(training_args, log_file_name):
 def get_model(model_args):
     idf = None
     if model_args.inf_free and model_args.idf_path:
+        logger.info(f"load idf from {model_args.idf_path}")
         with open(model_args.idf_path) as f:
             idf = json.load(f)
+    else:
+        logger.info(f"no idf")
 
     model = SparseModel(
         model_args.model_name_or_path,
