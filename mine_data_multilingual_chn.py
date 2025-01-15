@@ -99,8 +99,7 @@ def main():
     # accelerator.wait_for_everyone()
     model = get_model(model_args)
 
-    for dataset in ["mmarco-french"]:
-    # for dataset in ["zh_NLI_data"]:
+    for dataset in ["zh_NLI_data","mmarco-french","mmarco-chinese","DuReader","T2Ranking"]:
         path = os.path.join("mdata/bge-m3-data/parsed",dataset)
         with open(os.path.join(path, "corpus.json"), "r") as f:
             corpus = json.load(f)
@@ -130,7 +129,7 @@ def main():
                     index_name=dataset.lower(),
                     max_length=data_args.max_seq_length,
                     batch_size=25,
-                    result_size=200,
+                    result_size=60,
                     delete=True,
                 )
             )
