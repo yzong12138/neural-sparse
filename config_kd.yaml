@@ -3,8 +3,8 @@ logging_steps: 50
 
 inf_free: true
 idf_path: multilingual_idf_minagg.json
-model_name_or_path: output/baselines/en-pt-and-marco/checkpoint-50000
-tokenizer_name: output/baselines/en-pt-and-marco/checkpoint-50000
+model_name_or_path: output/pt/multilingual-mpt-5w/checkpoint-50000
+tokenizer_name: output/pt/multilingual-mpt-5w/checkpoint-50000
 split_batch: 6
 idf_requires_grad: true
 
@@ -28,7 +28,7 @@ lelu_alpha: 1.0
 lelu_alpha_steps: 20000
 max_docs_per_query: 100
 
-output_dir: output/kd/m3-top100-fixed-0.010
+output_dir: output/kd/multilingual-mpt-5w-res
 per_device_eval_batch_size: 50
 per_device_train_batch_size: 12
 
