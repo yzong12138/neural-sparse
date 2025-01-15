@@ -1,0 +1,44 @@
+logging_steps: 50
+# log_level_replica: info
+
+inf_free: true
+idf_path: multilingual_idf_minagg.json
+model_name_or_path: output/baselines/en-pt-and-marco/checkpoint-50000
+tokenizer_name: output/baselines/en-pt-and-marco/checkpoint-50000
+split_batch: 4
+idf_requires_grad: true
+
+max_seq_length: 256
+train_file_dir: mdata/kd
+data_type: kd
+loss_types: [kldiv]
+beir_dir: data/beir
+sample_num_one_query: 3
+use_in_batch_negatives: true
+flops_d_lambda: 0.02
+flops_d_T: 10000
+ranking_loss_weight: 1
+kd_ensemble_teacher_kwargs:
+  types: ["dense"]
+  model_ids: ["BAAI/bge-m3"]
+  teacher_tokenizer_ids: ["BAAI/bge-m3"]
+  score_scale: 30
+idf_lr: 0.002
+drep_auxilary_bias: 0.5
+drep_auxilary_bias_steps: 30000
+
+output_dir: output/kd/en-pt-result-0.5bias
+per_device_eval_batch_size: 50
+per_device_train_batch_size: 12
+
+log_level: info
+max_steps: 50000
+fp16: true
+learning_rate: 0.00002
+weight_decay: 0.01
+lr_scheduler_type: linear
+warmup_steps: 6000
+save_strategy: steps
+save_steps: 50000
+dataloader_drop_last: true
+max_grad_norm: null
