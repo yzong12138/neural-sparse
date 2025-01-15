@@ -17,7 +17,11 @@ from accelerate import Accelerator
 
 from torch.utils.data import Dataset
 
-from scripts.model.sparse_encoders import SparseModel, SparseEncoder, sparse_embedding_to_query
+from scripts.model.sparse_encoders import (
+    SparseModel,
+    SparseEncoder,
+    sparse_embedding_to_query,
+)
 from scripts.data.dataset import KeyValueDataset
 from scripts.utils import batch_search, get_os_client
 
@@ -34,7 +38,8 @@ class MmarcoCorpusDataset(Dataset):
         key = self.corpus_ids[idx]
         value = self.corpus[key]
         return key, value
-    
+
+
 async def search(
     queries: dict,
     model: SparseModel,
@@ -74,13 +79,17 @@ async def search(
         )
 
         for i, (_id, res) in enumerate(zip(ids, search_results)):
-            run_res[_id] = [[hit["_source"]["id"] for hit in res],[hit["_source"]["text"] for hit in res]]
-            
+            run_res[_id] = [
+                [hit["_source"]["id"] for hit in res],
+                [hit["_source"]["text"] for hit in res],
+            ]
+
     if delete:
         client = get_os_client()
         client.indices.delete(index_name, params={"timeout": 1000})
 
     return run_res
+
 
 def main():
     logging.basicConfig(
@@ -99,8 +108,14 @@ def main():
     # accelerator.wait_for_everyone()
     model = get_model(model_args)
 
-    for dataset in ["zh_NLI_data","mmarco-french","mmarco-chinese","DuReader","T2Ranking"]:
-        path = os.path.join("mdata/bge-m3-data/parsed",dataset)
+    for dataset in [
+        "zh_NLI_data",
+        "mmarco-french",
+        "mmarco-chinese",
+        "DuReader",
+        "T2Ranking",
+    ]:
+        path = os.path.join("mdata/bge-m3-data/parsed", dataset)
         with open(os.path.join(path, "corpus.json"), "r") as f:
             corpus = json.load(f)
         with open(os.path.join(path, "queries.json"), "r") as f:
@@ -137,7 +152,7 @@ def main():
             data = {"query": [], "docs": [], "first_rank": []}
 
             for q_id in queries:
-                hits,texts = run_res[q_id]
+                hits, texts = run_res[q_id]
                 pos_docs = set(query_pos_docs.get(q_id, []))
 
                 if len(pos_docs) == 0:
@@ -159,4 +174,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
