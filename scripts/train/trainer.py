@@ -124,7 +124,7 @@ class SparseModelTrainer(Trainer):
             with torch.no_grad():
                 nonzero = d_rep[d_rep > 0]
                 logger.info(
-                    f"nonzero entries: {torch.quantile(nonzero, torch.tensor([50,90,99]))}"
+                    f"nonzero entries: {torch.mean(nonzero)} {torch.mean(nonzero)} {torch.max(nonzero)}"
                 )
         # DP reduce grad by sum, while DDP reduce grad by mean
         # scale the loss to fix the gap
