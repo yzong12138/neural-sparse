@@ -59,11 +59,18 @@ class SparseModelTrainer(Trainer):
         kwargs["model"] = ModelWrapper(kwargs["model"], model_args.inf_free)
         super().__init__(**kwargs)
 
+        logger.info(self.data_args.flops_threshold)
+
     def flops_value(self, representation, group_num=1):
         # representation size: (ndevice * batch_size) * vocab_dim
         # group num: how many semantic similar documents representations in one batch
         representation = representation.reshape(-1, group_num, representation.shape[-1])
-        return torch.sum(torch.mean(torch.abs(representation), dim=0) ** 2)
+        w_j_per_doc = torch.abs(representation)
+        doc_length = torch.norm(w_j_per_doc, p=0, dim=2)
+        mask = (doc_length > self.data_args.flops_threshold).float()
+        mask = mask.unsqueeze(2).repeat(1, 1, w_j_per_doc.shape[2])
+        flops_per_average_token = torch.mean(mask * w_j_per_doc, dim=0)
+        return torch.sum(flops_per_average_token)
 
     def get_lambda(self, lambda_value, lambda_T):
         if self.state.global_step >= lambda_T:
@@ -111,9 +118,9 @@ class SparseModelTrainer(Trainer):
                 else self.data_args.lelu_alpha
                 * (1 - (self.state.global_step / self.data_args.lelu_alpha_steps))
             )
-            self.accelerator.unwrap_model(
-                self.model
-            ).sparse_model.lelu_alpha = lelu_alpha
+            self.accelerator.unwrap_model(self.model).sparse_model.lelu_alpha = (
+                lelu_alpha
+            )
 
         d_rep, q_rep = model(model_wrapper_input)
 

@@ -42,6 +42,7 @@ class DataTrainingArguments:
     lelu_alpha_steps: Optional[int] = field(default=None)
     first_rank_thresh: int = field(default=10000)
     max_docs_per_query: int = field(default=10000)
+    flops_threshold: int = field(default=100)
 
     def __post_init__(self):
         return
