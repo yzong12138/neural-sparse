@@ -145,13 +145,25 @@ class BGEM3Model(torch.nn.Module):
 class BiEncoderWrapper:
     CLS_MAP = {"sparse": SparseModel, "dense": DenseModel, "m3": BGEM3Model}
 
-    def __init__(self, types, model_ids, score_scale=30, use_in_batch_negatives=False):
+    def __init__(
+        self,
+        types,
+        model_ids,
+        score_scale=30,
+        use_in_batch_negatives=False,
+        weights=None,
+    ):
         assert len(types) == len(model_ids)
         assert len(types) != 0
         self.score_scale = score_scale
         self.use_in_batch_negatives = use_in_batch_negatives
         self.models = []
         self.accelerator = None
+        if weights is not None:
+            self.weights = weights
+        else:
+            self.weights = [1] * len(model_ids)
+        logger.info(self.weights)
 
         for i, (type, model_id) in enumerate(zip(types, model_ids)):
             cls = BiEncoderWrapper.CLS_MAP[type]
@@ -210,7 +222,7 @@ class BiEncoderWrapper:
             score = (score - min_t.unsqueeze(-1)) / (
                 (max_t - min_t + 1e-6).unsqueeze(-1)
             )
-            scores += score
+            scores += score * self.weights[i]
 
-        scores = scores / len(self.models)
+        scores = scores / sum(self.weights)
         return scores * self.score_scale

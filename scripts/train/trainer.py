@@ -185,6 +185,7 @@ class SparseModelTrainer(Trainer):
             score_scale=self.data_args.kd_ensemble_teacher_kwargs.get(
                 "score_scale", 30
             ),
+            weights=self.data_args.kd_ensemble_teacher_kwargs.get("weights", None),
         )
         self.bi_encoder_teacher.accelerator = self.accelerator
         for i, model in enumerate(self.bi_encoder_teacher.models):

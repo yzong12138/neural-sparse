@@ -31,5 +31,5 @@ torchrun --nproc_per_node=${N_DEVICES} evaluate_miracl.py \
   --log_level info \
   --per_device_eval_batch_size 25 \
   --idf_path $IDF_PATH \
-  --miracl_datasets zh,fr
+  --miracl_datasets zh
 done
