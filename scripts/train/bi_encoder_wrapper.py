@@ -7,6 +7,13 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+def norm_score(score):
+    max_t = score.max(dim=1).values
+    min_t = score.min(dim=1).values
+    score = (score - min_t.unsqueeze(-1)) / (
+        (max_t - min_t + 1e-6).unsqueeze(-1)
+    )
+    return score
 
 class SparseModel(torch.nn.Module):
     @staticmethod
@@ -201,7 +208,7 @@ class BiEncoderWrapper:
                         "attention_mask"
                     ][:, 1:].sum(-1, keepdim=True)
 
-                    score = score_dense + score_colbert + 0.3 * score_sparse
+                    score = norm_score(score_dense) + norm_score(score_colbert) + 0.3 * norm_score(score_sparse)
                 else:
                     raise NotImplementedError
 

@@ -20,7 +20,7 @@ fi
 
 echo "IDF_PATH: $IDF_PATH"
 
-torchrun --nproc_per_node=${N_DEVICES} train_ir.py $CONFIG_PATH
+# torchrun --nproc_per_node=${N_DEVICES} train_ir.py $CONFIG_PATH
 
 for step in {$MAX_STEPS,}
 do
