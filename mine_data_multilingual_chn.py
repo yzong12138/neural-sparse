@@ -123,19 +123,19 @@ def main():
         with open(os.path.join(path, "query_pos_docs.json"), "r") as f:
             query_pos_docs = json.load(f)
 
-        asyncio.run(
-            ingest(
-                dataset=MmarcoCorpusDataset(corpus=corpus),
-                model=model,
-                out_dir="tmp/out",
-                index_name=dataset.lower(),
-                accelerator=accelerator,
-                max_length=data_args.max_seq_length,
-                batch_size=25,
-            )
-        )
+        # asyncio.run(
+        #     ingest(
+        #         dataset=MmarcoCorpusDataset(corpus=corpus),
+        #         model=model,
+        #         out_dir="tmp/out",
+        #         index_name=dataset.lower(),
+        #         accelerator=accelerator,
+        #         max_length=data_args.max_seq_length,
+        #         batch_size=25,
+        #     )
+        # )
 
-        if accelerator.is_local_main_process:
+        if 1 and accelerator.is_local_main_process:
             run_res = asyncio.run(
                 search(
                     queries=queries,
@@ -145,7 +145,7 @@ def main():
                     max_length=data_args.max_seq_length,
                     batch_size=25,
                     result_size=60,
-                    delete=True,
+                    delete=False,
                 )
             )
 
@@ -170,7 +170,8 @@ def main():
 
             ds = datasets.Dataset.from_dict(data)
             ds.save_to_disk(f"mdata/chn-pt/{dataset}")
-
+            
+        accelerator.wait_for_everyone()
 
 if __name__ == "__main__":
     main()
