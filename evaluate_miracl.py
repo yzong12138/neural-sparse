@@ -38,11 +38,14 @@ def main():
         "data_args": asdict(data_args),
         "training_args": asdict(training_args),
     }
-    miracl_eval_dir = os.path.join(training_args.output_dir, "miracl_eval")
+    eval_output_dir = (
+        "miracl_eval"
+        if model_args.prune_ratio is None
+        else f"miracl_eval_{model_args.prune_ratio}"
+    )
+    miracl_eval_dir = os.path.join(training_args.output_dir, eval_output_dir)
     os.makedirs(miracl_eval_dir, exist_ok=True)
-    with open(
-        os.path.join(training_args.output_dir, "miracl_eval", "config.yaml"), "w"
-    ) as file:
+    with open(os.path.join(miracl_eval_dir, "config.yaml"), "w") as file:
         yaml.dump(args_dict, file, sort_keys=False)
 
     set_logging(training_args, "eval_miracl.log")

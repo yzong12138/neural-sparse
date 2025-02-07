@@ -59,11 +59,14 @@ def main():
         "data_args": asdict(data_args),
         "training_args": asdict(training_args),
     }
-    beir_eval_dir = os.path.join(training_args.output_dir, "beir_eval")
+    eval_output_dir = (
+        "beir_eval"
+        if model_args.prune_ratio is None
+        else f"beir_eval_{model_args.prune_ratio}"
+    )
+    beir_eval_dir = os.path.join(training_args.output_dir, eval_output_dir)
     os.makedirs(beir_eval_dir, exist_ok=True)
-    with open(
-        os.path.join(training_args.output_dir, "beir_eval", "config.yaml"), "w"
-    ) as file:
+    with open(os.path.join(beir_eval_dir, "config.yaml"), "w") as file:
         yaml.dump(args_dict, file, sort_keys=False)
 
     set_logging(training_args, "eval_beir.log")

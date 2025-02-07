@@ -26,6 +26,7 @@ class SparseModel(torch.nn.Module):
         tokenizer_id=None,
         split_batch=1,
         idf_requires_grad=False,
+        prune_ratio=None,
     ):
         super().__init__()
 
@@ -54,6 +55,8 @@ class SparseModel(torch.nn.Module):
         self.idf_requires_grad = idf_requires_grad
         self.d_bias = 0
         self.lelu_alpha = 0
+        self.prune_ratio = prune_ratio
+        logger.info(f"model prune ratio: {prune_ratio}")
 
     def forward(self, inf_free=False, **kwargs):
         # input kwargs is the features from tokenizer
@@ -71,7 +74,11 @@ class SparseModel(torch.nn.Module):
             output = mask_padded_positions(output, attention_mask)
             values, _ = torch.max(output, dim=1)
             values = torch.log(1 + self.lelu_alpha + F.elu(values, self.lelu_alpha))
-            return values
+            if self.prune_ratio is None:
+                return values
+            else:
+                max_values = values.max(dim=-1)[0].unsqueeze(1) * self.prune_ratio
+                return values * (values > max_values)
 
         batch_size = kwargs["input_ids"].size(0)
         split_sizes = [batch_size // self.split_batch] * self.split_batch
@@ -95,7 +102,11 @@ class SparseModel(torch.nn.Module):
 
         output = torch.cat(outputs, dim=0)
         output = torch.log(1 + self.lelu_alpha + F.elu(output, self.lelu_alpha))
-        return output
+        if self.prune_ratio is None:
+            return output
+        else:
+            max_values = output.max(dim=-1)[0].unsqueeze(1) * self.prune_ratio
+            return output * (output > max_values)
 
     def _encode_inf_free(self, **kwargs):
         input_ids = kwargs.get("input_ids")
