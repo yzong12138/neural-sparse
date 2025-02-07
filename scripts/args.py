@@ -49,6 +49,7 @@ class ModelArguments:
     idf_path: Optional[str] = field(default=None)
     split_batch: Optional[int] = field(default=1)
     idf_requires_grad: Optional[bool] = field(default=False)
+    prune_ratio: Optional[float] = field(default=None)
 
     def __post_init__(self):
         if self.tokenizer_name is None:
