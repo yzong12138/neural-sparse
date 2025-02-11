@@ -123,7 +123,7 @@ class KnowledgeDistillDataset(Dataset):
         """
         self.data = []
         logger.info(
-            f"KnowledgeDistillDataset input data number: {len(all_data)} {first_rank_thresh} {max_docs_per_query}"
+            f"KnowledgeDistillDataset input data number: {len(all_data)} {first_rank_thresh} {max_docs_per_query} {shuffle}"
         )
         assert sample_num >= 2
 

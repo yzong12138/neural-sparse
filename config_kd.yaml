@@ -3,13 +3,13 @@ logging_steps: 50
 
 inf_free: true
 idf_path: multilingual_idf_minagg.json
-model_name_or_path: output/pt/multilingual-mpt-5w/checkpoint-50000
-tokenizer_name: output/pt/multilingual-mpt-5w/checkpoint-50000
+model_name_or_path: output/pt/zh-pt/checkpoint-50000
+tokenizer_name: output/pt/zh-pt/checkpoint-50000
 split_batch: 6
 idf_requires_grad: true
 
 max_seq_length: 256
-train_file_dir: mdata/kd-v2-dedup
+train_file_dir: mdata/kd-v3-dedup
 data_type: kd
 loss_types: [kldiv]
 beir_dir: data/beir
@@ -22,13 +22,15 @@ kd_ensemble_teacher_kwargs:
   types: ["m3"]
   model_ids: ["BAAI/bge-m3"]
   teacher_tokenizer_ids: ["BAAI/bge-m3"]
+  weights: [1]
   score_scale: 30
 idf_lr: 0.002
 lelu_alpha: 1.0
 lelu_alpha_steps: 20000
 max_docs_per_query: 100
+shuffle: true
 
-output_dir: output/kd/m3-top100-fixed-0.010
+output_dir: output/kd/zh-pt-v3-shuffle
 per_device_eval_batch_size: 50
 per_device_train_batch_size: 12
 
