@@ -1,6 +1,9 @@
 set -e
 
-EVAL_BEIR=false
+DO_TRAIN=false
+EVAL_BEIR=true
+EVAL_MIRACL=false
+PRUNE_RATIO=0.1
 CONFIG_PATH='config_kd.yaml';
 OUTPUT_DIR=$(grep "^output_dir:" "$CONFIG_PATH" | sed "s/^output_dir: //")
 MAX_STEPS=$(grep "^max_steps:" "$CONFIG_PATH" | sed "s/^max_steps: //")
@@ -20,18 +23,27 @@ fi
 
 echo "IDF_PATH: $IDF_PATH"
 
+if [ "$DO_TRAIN" = "true" ]; then
 torchrun --nproc_per_node=${N_DEVICES} train_ir.py $CONFIG_PATH
+else
+    echo "skip train"
+fi
 
-for step in {$MAX_STEPS,}
-do
-torchrun --nproc_per_node=${N_DEVICES} evaluate_miracl.py \
-  --model_name_or_path ${OUTPUT_DIR}/checkpoint-${step} \
-  --inf_free true \
-  --output_dir ${OUTPUT_DIR} \
-  --log_level info \
-  --per_device_eval_batch_size 25 \
-  --idf_path $IDF_PATH
-done
+if [ "$EVAL_MIRACL" = "true" ]; then
+  for step in {$MAX_STEPS,}
+  do
+  torchrun --nproc_per_node=${N_DEVICES} evaluate_miracl.py \
+    --model_name_or_path ${OUTPUT_DIR}/checkpoint-${step} \
+    --inf_free true \
+    --output_dir ${OUTPUT_DIR} \
+    --log_level info \
+    --per_device_eval_batch_size 25 \
+    --idf_path $IDF_PATH \
+    --prune_ratio $PRUNE_RATIO
+  done
+else
+    echo "skip eval miracl"
+fi
 
 if [ "$EVAL_BEIR" = "true" ]; then
     for step in {$MAX_STEPS,}
@@ -43,7 +55,7 @@ if [ "$EVAL_BEIR" = "true" ]; then
         --log_level info \
         --per_device_eval_batch_size 25 \
         --idf_path $IDF_PATH \
-        --prune_ratio 0.1
+        --prune_ratio $PRUNE_RATIO
       done
 else
     echo "skip eval beir"
