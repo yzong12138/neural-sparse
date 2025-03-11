@@ -4,7 +4,7 @@ logging_steps: 50
 inf_free: true
 model_name_or_path: FacebookAI/roberta-base
 tokenizer_name: FacebookAI/roberta-base
-idf_path: roberta_idf.json
+# idf_path: roberta_idf.json
 
 max_seq_length: 256
 train_file: data/msmarco_ft
@@ -16,7 +16,7 @@ flops_d_lambda: 0.004
 flops_d_T: 10000
 ranking_loss_weight: 1
 
-output_dir: output/baselines/roberta
+output_dir: output/baselines/roberta-noidf
 per_device_eval_batch_size: 50
 per_device_train_batch_size: 20
 
