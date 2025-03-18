@@ -59,9 +59,9 @@ class SparseModel(torch.nn.Module):
         self.tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_id)
         if preprocess_func is not None:
             logger.info(f"Using preprocess function {preprocess_func}")
-            sample = ["Hello WorldABC."]
-            logger.info(f"before:{sample}, after:{preprocess_func(sample)}")
             func = getattr(TextPreProcessors, preprocess_func)
+            sample = ["Hello WorldABC."]
+            logger.info(f"before:{sample}, after:{func(sample)}")
             self.tokenizer = TokenizerWithProcessing(self.tokenizer, func)
 
         self.special_token_ids = [
