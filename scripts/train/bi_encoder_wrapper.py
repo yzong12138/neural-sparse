@@ -4,10 +4,10 @@ import transformers
 from scripts.utils import gather_rep
 
 
-class SparseModel(torch.nn.Module):
+class BiSparseModel(torch.nn.Module):
     @staticmethod
     def from_pretrained(path):
-        return SparseModel(path)
+        return BiSparseModel(path)
 
     def __init__(self, model_id):
         super().__init__()
@@ -53,7 +53,7 @@ class DenseModel(torch.nn.Module):
 
 
 class BiEncoderWrapper:
-    CLS_MAP = {"sparse": SparseModel, "dense": DenseModel}
+    CLS_MAP = {"sparse": BiSparseModel, "dense": DenseModel}
 
     def __init__(self, types, model_ids, score_scale=30, use_in_batch_negatives=False):
         assert len(types) == len(model_ids)
