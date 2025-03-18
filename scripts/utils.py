@@ -59,6 +59,7 @@ def get_model(model_args):
         split_batch=model_args.split_batch,
         idf_requires_grad=model_args.idf_requires_grad,
         prune_ratio=model_args.prune_ratio,
+        preprocess_func=model_args.preprocess_func,
     )
 
     return model

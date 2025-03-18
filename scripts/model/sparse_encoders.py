@@ -9,6 +9,34 @@ from transformers import AutoModelForMaskedLM, BertForMaskedLM, AutoConfig
 logger = logging.getLogger(__name__)
 
 
+class TokenizerWithProcessing:
+    def __init__(self, original, process=None):
+        self._original = original
+        self.process = process
+
+    def __call__(self, text, **kwargs):
+        assert isinstance(text, list)
+        assert isinstance(text[0], str)
+        if self.process is not None:
+            text = self.process(text)
+        return self._original.__call__(text, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._original, name)
+
+
+class TextPreProcessors:
+    @staticmethod
+    def to_lower(texts):
+        texts = [text.lower() for text in texts]
+        return texts
+
+    @staticmethod
+    def blank_prefix(texts):
+        texts = [" " + text for text in texts]
+        return texts
+
+
 class SparseModel(torch.nn.Module):
     def __init__(
         self,
@@ -18,6 +46,7 @@ class SparseModel(torch.nn.Module):
         split_batch=1,
         idf_requires_grad=False,
         prune_ratio=None,
+        preprocess_func=None,
     ):
         super().__init__()
 
@@ -28,6 +57,11 @@ class SparseModel(torch.nn.Module):
             tokenizer_id = model_id
         self.backbone = transformers.AutoModelForMaskedLM.from_pretrained(model_id)
         self.tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_id)
+        if preprocess_func is not None:
+            logger.info(f"Using preprocess function {preprocess_func}")
+            func = getattr(TextPreProcessors, preprocess_func)
+            self.tokenizer = TokenizerWithProcessing(self.tokenizer, func)
+
         self.special_token_ids = [
             self.tokenizer.vocab[token]
             for token in self.tokenizer.special_tokens_map.values()

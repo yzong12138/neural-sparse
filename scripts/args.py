@@ -50,10 +50,15 @@ class ModelArguments:
     split_batch: Optional[int] = field(default=1)
     idf_requires_grad: Optional[bool] = field(default=False)
     prune_ratio: Optional[float] = field(default=None)
+    preprocess_func: Optional[str] = field(default=None)
 
     def __post_init__(self):
         if self.tokenizer_name is None:
             self.tokenizer_name = self.model_name_or_path
+        if self.idf_path == "null":
+            self.idf_path = None
+        if self.preprocess_func == "null":
+            self.preprocess_func = None
         return
 
 
