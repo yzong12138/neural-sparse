@@ -76,7 +76,12 @@ class SparseModel(torch.nn.Module):
             for token in self.tokenizer.special_tokens_map.values()
         ]
 
-        idf_vector = [1.0] * self.tokenizer.vocab_size
+        self.vocab_size = self.tokenizer.vocab_size
+        if tokenizer_id == "Alibaba-NLP/gte-en-mlm-base":
+            self.vocab_size = self.backbone.new.embeddings.word_embeddings.weight.shape[
+                0
+            ]
+        idf_vector = [1.0] * self.vocab_size
         if idf is not None:
             logger.info(f"set idf to the model. requires_grad: {idf_requires_grad}")
             for token, weight in idf.items():
@@ -139,9 +144,7 @@ class SparseModel(torch.nn.Module):
     def _encode_inf_free(self, **kwargs):
         input_ids = kwargs.get("input_ids")
         batch_size = input_ids.shape[0]
-        out = torch.zeros(
-            batch_size, self.tokenizer.vocab_size, device=input_ids.device
-        )
+        out = torch.zeros(batch_size, self.vocab_size, device=input_ids.device)
         out[torch.arange(batch_size).unsqueeze(-1), input_ids] = 1
         out[:, self.special_token_ids] = 0
         return out * torch.relu(self.idf_vector)
@@ -150,7 +153,7 @@ class SparseModel(torch.nn.Module):
 class SparsePostProcessor(object):
     def __init__(self, tokenizer):
         self.tokenizer = tokenizer
-        self.id_to_token = ["" for i in range(tokenizer.vocab_size)]
+        self.id_to_token = ["" for i in range(tokenizer.vocab_size + 100)]
         for token, _id in tokenizer.vocab.items():
             self.id_to_token[_id] = token
 
@@ -178,10 +181,10 @@ class SparseEncoder:
         self.do_count = do_count
         self.max_length = max_length
         self.device = self.model.backbone.device
-        self.count_tensor = torch.zeros(self.tokenizer.vocab_size).to(self.device)
+        self.count_tensor = torch.zeros(self.model.vocab_size).to(self.device)
 
     def reset_count(self):
-        self.count_tensor = torch.zeros(self.tokenizer.vocab_size).to(self.device)
+        self.count_tensor = torch.zeros(self.model.vocab_size).to(self.device)
 
     def encode(self, texts, inf_free=False):
         features = self.tokenizer(
