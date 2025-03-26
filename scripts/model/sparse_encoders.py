@@ -36,6 +36,11 @@ class TextPreProcessors:
         texts = [" " + text for text in texts]
         return texts
 
+    @staticmethod
+    def blank_prefix_lower(texts):
+        texts = [" " + text.lower() for text in texts]
+        return texts
+
 
 class SparseModel(torch.nn.Module):
     def __init__(
@@ -55,7 +60,9 @@ class SparseModel(torch.nn.Module):
 
         if tokenizer_id is None:
             tokenizer_id = model_id
-        self.backbone = transformers.AutoModelForMaskedLM.from_pretrained(model_id)
+        self.backbone = transformers.AutoModelForMaskedLM.from_pretrained(
+            model_id, trust_remote_code=True
+        )
         self.tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_id)
         if preprocess_func is not None:
             logger.info(f"Using preprocess function {preprocess_func}")

@@ -11,7 +11,9 @@ class BiSparseModel(torch.nn.Module):
 
     def __init__(self, model_id):
         super().__init__()
-        self.backbone = transformers.AutoModelForMaskedLM.from_pretrained(model_id)
+        self.backbone = transformers.AutoModelForMaskedLM.from_pretrained(
+            model_id, trust_remote_code=True
+        )
         self.tokenizer = transformers.AutoTokenizer.from_pretrained(model_id)
         self.special_token_ids = [
             self.tokenizer.vocab[token]
