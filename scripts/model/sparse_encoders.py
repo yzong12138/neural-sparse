@@ -77,10 +77,18 @@ class SparseModel(torch.nn.Module):
         ]
 
         self.vocab_size = self.tokenizer.vocab_size
-        if tokenizer_id == "Alibaba-NLP/gte-en-mlm-base":
-            self.vocab_size = self.backbone.new.embeddings.word_embeddings.weight.shape[
+        try:
+            emb_vocab_size = self.backbone.new.embeddings.word_embeddings.weight.shape[
                 0
             ]
+            if emb_vocab_size != self.vocab_size:
+                logger.info(
+                    f"reset the vocab size from {self.vocab_size} to {emb_vocab_size}"
+                )
+                self.vocab_size = emb_vocab_size
+        except:
+            pass
+
         idf_vector = [1.0] * self.vocab_size
         if idf is not None:
             logger.info(f"set idf to the model. requires_grad: {idf_requires_grad}")
