@@ -65,9 +65,14 @@ def get_model(model_args):
     return model
 
 
-async def do_search(session, endpoint, query_body, post_process=None):
+async def do_search(
+    session, endpoint, query_body, post_process=None, use_two_phase=False
+):
     url = endpoint
     body = query_body
+
+    if use_two_phase:
+        url = url + "?search_pipeline=neural_search_pipeline"
 
     async with session.get(url, json=body, verify_ssl=False) as resp:
         response = await resp.json()
@@ -100,6 +105,7 @@ async def batch_search(
     get_query_lambda,
     post_process=None,
     interval=0.01,
+    use_two_phase=False,
 ):
     timeout = ClientTimeout(total=60)
     async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -112,6 +118,7 @@ async def batch_search(
                         endpoint_lambda(index_name),
                         get_query_lambda(query),
                         post_process=post_process,
+                        use_two_phase=use_two_phase,
                     )
                 )
             )
