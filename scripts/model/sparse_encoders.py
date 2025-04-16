@@ -212,16 +212,14 @@ class SparseEncoder:
         return output
 
 
-def sparse_embedding_to_query(token_weight_map, field_name="text_sparse"):
-    clause_list = []
-    for token, weight in token_weight_map.items():
-        clause_list.append(
-            {
-                "rank_feature": {
-                    "field": f"{field_name}.{token}",
-                    "boost": weight,
-                    "linear": {},
-                }
-            }
-        )
-    return {"bool": {"should": clause_list}}
+def sparse_embedding_to_query(
+    token_weight_map, field_name="text_sparse", query_prune=0
+):
+    if query_prune > 0:
+        thresh = max(token_weight_map.values()) * query_prune
+        token_weight_map = {
+            token: weight
+            for token, weight in token_weight_map.items()
+            if weight > thresh
+        }
+    return {"neural_sparse": {field_name: {"query_tokens": token_weight_map}}}

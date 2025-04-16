@@ -36,6 +36,9 @@ class DataTrainingArguments:
     )
     idf_lr: Optional[float] = field(default=None)
     first_rank_thresh: int = field(default=10000)
+    use_two_phase: bool = field(default=False)
+    skip_ingest: bool = field(default=False)
+    query_prune: float = field(default=0)
 
     def __post_init__(self):
         return
