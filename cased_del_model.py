@@ -1,89 +1,191 @@
-import torch
-import re
 import os
-import transformers
 import json
+import torch
+import transformers
+from collections import defaultdict
 
 
-def has_uppercase(s):
-    return any(c.isupper() for c in s)
+def has_uppercase(text):
+    """Check if a string contains uppercase characters."""
+    return any(c.isupper() for c in text)
 
 
-# 1. 加载原始tokenizer和model
-tokenizer = transformers.AutoTokenizer.from_pretrained("google-bert/bert-base-cased")
-model = transformers.AutoModelForMaskedLM.from_pretrained("google-bert/bert-base-cased")
+def create_case_insensitive_bert_model(
+    source_model_name="google-bert/bert-base-cased",
+    output_dir="case-insensitive-bert-model",
+    similarity_threshold=0.9,
+    debug_file="merged_tokens.jsonl",
+):
+    """
+    Create a case-insensitive version of a BERT model by merging similar uppercase
+    and lowercase token embeddings.
 
-# 2. 找出要删除的token索引
-vocab = tokenizer.get_vocab()
-special_tokens = tokenizer.special_tokens_map.values()
+    Args:
+        source_model_name: The source model to convert
+        output_dir: Directory to save the converted model
+        similarity_threshold: Cosine similarity threshold for merging embeddings
+        debug_file: File to save information about merged tokens
+    """
+    print(f"Loading model and tokenizer from {source_model_name}...")
+    tokenizer = transformers.AutoTokenizer.from_pretrained(source_model_name)
+    model = transformers.AutoModelForMaskedLM.from_pretrained(source_model_name)
 
-new_vocab = {}
-new_idx = 0
-old_to_new_idx = {}
+    # Get original embeddings and vocabulary
+    original_embeddings = model.bert.embeddings.word_embeddings.weight.data
+    original_vocab = tokenizer.get_vocab()
+    special_tokens = tokenizer.special_tokens_map.values()
 
-for old_idx in range(len(vocab)):
-    token = tokenizer._convert_id_to_token(old_idx)
-    if token not in special_tokens:
-        if has_uppercase(token):
-            if token.lower() in vocab:
+    # Map tokens to keep and those to merge
+    print("Identifying tokens to merge...")
+    new_vocab = {}
+    old_to_new_idx = {}
+    merged_tokens = defaultdict(list)
+    new_idx = 0
+
+    # First pass: identify tokens to merge
+    for old_idx in range(len(original_vocab)):
+        token = tokenizer._convert_id_to_token(old_idx)
+
+        # Skip special tokens and handle uppercase tokens
+        if token not in special_tokens:
+            if has_uppercase(token):
+                if token.lower() in original_vocab:
+                    lowercase_id = tokenizer._convert_token_to_id_with_added_voc(
+                        token.lower()
+                    )
+                    uppercase_id = tokenizer._convert_token_to_id_with_added_voc(token)
+
+                    # Calculate similarity between embeddings
+                    similarity = (
+                        original_embeddings[lowercase_id]
+                        @ original_embeddings[uppercase_id].T
+                    )
+                    if similarity.max() >= similarity_threshold:
+                        merged_tokens[lowercase_id].append(uppercase_id)
                 continue
-            else:
-                token = token.lower()
-                if token in new_vocab:
-                    continue
 
-    new_vocab[token] = new_idx
-    old_to_new_idx[old_idx] = new_idx
-    new_idx += 1
+        # Token to keep
+        new_vocab[token] = new_idx
+        old_to_new_idx[old_idx] = new_idx
+        new_idx += 1
 
+    # Save information about merged tokens for debugging
+    if debug_file:
+        save_merged_tokens_info(
+            tokenizer, original_embeddings, merged_tokens, debug_file
+        )
 
-tokenizer.save_pretrained("tmp")
-os.makedirs("cased-del-model", exist_ok=True)
+    # Create temporary tokenizer first
+    temp_dir = "tmp_tokenizer"
+    tokenizer.save_pretrained(temp_dir)
 
-with open("tmp/tokenizer.json") as f:
-    config = json.load(f)
-config["model"]["vocab"] = new_vocab
-with open("cased-del-model/tokenizer.json", "w") as f:
-    json.dump(config, f, indent=4)
+    # Create output directory
+    os.makedirs(output_dir, exist_ok=True)
 
+    # Update tokenizer files
+    update_tokenizer_files(temp_dir, output_dir, new_vocab)
 
-with open("tmp/tokenizer_config.json") as f:
-    config = json.load(f)
-config["do_lower_case"] = True
-with open("cased-del-model/tokenizer_config.json", "w") as f:
-    json.dump(config, f, indent=4)
+    # Load and verify the new tokenizer
+    new_tokenizer = transformers.AutoTokenizer.from_pretrained(output_dir)
+    new_tokenizer.save_pretrained(output_dir)
 
-# generate vocab.txt, special_tokens_map.json
-tokenizer = transformers.AutoTokenizer.from_pretrained("cased-del-model")
-tokenizer.save_pretrained("cased-del-model")
+    # Update model embeddings and projection layers
+    update_model_embeddings(
+        model, original_embeddings, old_to_new_idx, merged_tokens, len(new_vocab)
+    )
 
-old_embeddings = model.bert.embeddings.word_embeddings.weight.data
-new_embeddings = torch.zeros((len(new_vocab), old_embeddings.shape[1]))
+    # Save the modified model
+    model.config.vocab_size = len(new_vocab)
+    model.save_pretrained(output_dir)
 
-for old_idx, new_idx in old_to_new_idx.items():
-    new_embeddings[new_idx] = old_embeddings[old_idx]
-
-model.bert.embeddings.word_embeddings = torch.nn.Embedding(
-    len(new_vocab), old_embeddings.shape[1], _weight=new_embeddings
-)
+    print(f"Model successfully converted and saved to {output_dir}")
+    return model, new_tokenizer
 
 
-old_mlm_bias = model.cls.predictions.bias.data
-old_mlm_decoder = model.cls.predictions.decoder.weight.data
+def save_merged_tokens_info(tokenizer, embeddings, merged_tokens, output_file):
+    """Save information about merged tokens to a file for analysis."""
+    print(f"Saving merged token information to {output_file}...")
+    with open(output_file, "w") as f:
+        for base_id, merged_ids in merged_tokens.items():
+            all_ids = [base_id] + merged_ids
+            tokens = [tokenizer._convert_id_to_token(id) for id in all_ids]
+            token_embeddings = embeddings[all_ids]
+            similarities = token_embeddings[0] @ token_embeddings.T
 
-new_mlm_bias = torch.zeros(len(new_vocab))
-new_mlm_decoder = torch.zeros((len(new_vocab), old_mlm_decoder.shape[1]))
+            f.write(json.dumps([tokens, similarities.numpy().tolist()]))
+            f.write("\n")
 
-for old_idx, new_idx in old_to_new_idx.items():
-    new_mlm_bias[new_idx] = old_mlm_bias[old_idx]
-    new_mlm_decoder[new_idx] = old_mlm_decoder[old_idx]
 
-model.cls.predictions.decoder = torch.nn.Linear(
-    old_mlm_decoder.shape[1], len(new_vocab), bias=False
-)
-model.cls.predictions.decoder.weight.data = new_mlm_decoder
-model.cls.predictions.bias = torch.nn.Parameter(new_mlm_bias)
+def update_tokenizer_files(temp_dir, output_dir, new_vocab):
+    """Update tokenizer configuration files with the new vocabulary."""
+    print("Updating tokenizer configuration...")
 
-# 6. 更新config
-model.config.vocab_size = len(new_vocab)
-model.save_pretrained("cased-del-model")
+    # Update tokenizer.json
+    with open(f"{temp_dir}/tokenizer.json") as f:
+        config = json.load(f)
+    config["model"]["vocab"] = new_vocab
+    with open(f"{output_dir}/tokenizer.json", "w") as f:
+        json.dump(config, f, indent=4)
+
+    # Update tokenizer_config.json
+    with open(f"{temp_dir}/tokenizer_config.json") as f:
+        config = json.load(f)
+    config["do_lower_case"] = True
+    with open(f"{output_dir}/tokenizer_config.json", "w") as f:
+        json.dump(config, f, indent=4)
+
+
+def update_model_embeddings(
+    model, original_embeddings, old_to_new_idx, merged_tokens, new_vocab_size
+):
+    """
+    Update model embeddings and MLM projection layers to account for merged tokens.
+    """
+    print("Updating model embeddings and projection layers...")
+
+    # Update word embeddings
+    new_embeddings = torch.zeros((new_vocab_size, original_embeddings.shape[1]))
+    for old_idx, new_idx in old_to_new_idx.items():
+        if old_idx in merged_tokens:
+            # Average embeddings for merged tokens
+            all_ids = [old_idx] + merged_tokens[old_idx]
+            new_embeddings[new_idx] = torch.mean(original_embeddings[all_ids], dim=0)
+        else:
+            new_embeddings[new_idx] = original_embeddings[old_idx]
+
+    # Replace embedding layer
+    model.bert.embeddings.word_embeddings = torch.nn.Embedding(
+        new_vocab_size, original_embeddings.shape[1], _weight=new_embeddings
+    )
+
+    # Update MLM head (bias and decoder)
+    old_mlm_bias = model.cls.predictions.bias.data
+    old_mlm_decoder = model.cls.predictions.decoder.weight.data
+
+    new_mlm_bias = torch.zeros(new_vocab_size)
+    new_mlm_decoder = torch.zeros((new_vocab_size, old_mlm_decoder.shape[1]))
+
+    for old_idx, new_idx in old_to_new_idx.items():
+        new_mlm_bias[new_idx] = old_mlm_bias[old_idx]
+        if old_idx in merged_tokens:
+            all_ids = [old_idx] + merged_tokens[old_idx]
+            new_mlm_decoder[new_idx] = torch.mean(old_mlm_decoder[all_ids], dim=0)
+        else:
+            new_mlm_decoder[new_idx] = old_mlm_decoder[old_idx]
+
+    # Replace MLM projection layers
+    model.cls.predictions.decoder = torch.nn.Linear(
+        old_mlm_decoder.shape[1], new_vocab_size, bias=False
+    )
+    model.cls.predictions.decoder.weight.data = new_mlm_decoder
+    model.cls.predictions.bias = torch.nn.Parameter(new_mlm_bias)
+
+
+if __name__ == "__main__":
+    # Example usage
+    model, tokenizer = create_case_insensitive_bert_model(
+        source_model_name="google-bert/bert-base-cased",
+        output_dir="case-insensitive-bert",
+        similarity_threshold=0.9,
+        debug_file="merged_tokens.jsonl",
+    )
