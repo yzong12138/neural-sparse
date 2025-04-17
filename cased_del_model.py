@@ -13,7 +13,7 @@ def has_uppercase(text):
 def create_case_insensitive_bert_model(
     source_model_name="google-bert/bert-base-cased",
     output_dir="case-insensitive-bert-model",
-    similarity_threshold=0.9,
+    similarity_threshold=None,
     debug_file="merged_tokens.jsonl",
 ):
     """
@@ -60,7 +60,10 @@ def create_case_insensitive_bert_model(
                         original_embeddings[lowercase_id]
                         @ original_embeddings[uppercase_id].T
                     )
-                    if similarity.max() >= similarity_threshold:
+                    if (
+                        similarity_threshold is None
+                        or similarity.max() >= similarity_threshold
+                    ):
                         merged_tokens[lowercase_id].append(uppercase_id)
                 continue
 
@@ -99,13 +102,14 @@ def create_case_insensitive_bert_model(
     model.save_pretrained(output_dir)
 
     print(f"Model successfully converted and saved to {output_dir}")
-    return model, new_tokenizer
+    return model, new_tokenizer, old_to_new_idx
 
 
 def save_merged_tokens_info(tokenizer, embeddings, merged_tokens, output_file):
     """Save information about merged tokens to a file for analysis."""
     print(f"Saving merged token information to {output_file}...")
     with open(output_file, "w") as f:
+        f.write(json.dumps(merged_tokens) + "\n")
         for base_id, merged_ids in merged_tokens.items():
             all_ids = [base_id] + merged_ids
             tokens = [tokenizer._convert_id_to_token(id) for id in all_ids]
@@ -181,11 +185,64 @@ def update_model_embeddings(
     model.cls.predictions.bias = torch.nn.Parameter(new_mlm_bias)
 
 
+def get_mapping_and_cluster_tokens():
+    with open("old_to_new_idx.json") as f:
+        idx_map = json.load(f)
+
+    with open("merged_tokens.jsonl") as f:
+        merged_tokens = json.loads(f.readline())
+
+    indices_0 = list(idx_map.values())
+    indices_1 = list(idx_map.keys())
+
+    for key, values in merged_tokens.items():
+        for value in values:
+            if value == int(key):
+                continue
+            indices_0.append(idx_map[key])
+            indices_1.append(value)
+
+    indices_0 = [int(x) for x in indices_0]
+    indices_1 = [int(x) for x in indices_1]
+
+    new_idx_num = dict()
+    for key, vs in merged_tokens.items():
+        vs = [v for v in vs if v != int(key)]
+        if vs == []:
+            continue
+        new_idx_num[idx_map[key]] = len(vs) + 1
+
+    indices = torch.stack([torch.tensor(indices_0), torch.tensor(indices_1)])
+    values = torch.ones_like(torch.tensor(indices_0)).float()
+
+    for i, c_id in enumerate(indices[0]):
+        c_id = int(c_id)
+        values[i] /= new_idx_num.get(c_id, 1)
+
+    mapping = torch.sparse_coo_tensor(
+        indices, values, size=(len(idx_map), model.config.vocab_size)
+    ).coalesce()
+
+    from transformers import AutoTokenizer
+
+    tokenizer = AutoTokenizer.from_pretrained("google-bert/bert-base-cased")
+
+    cluster_to_tokens = {}
+
+    for k, v in idx_map.items():
+        cluster_to_tokens[v] = tokenizer._convert_id_to_token(int(k))
+
+    torch.save(mapping, "cased-mapping.bin")
+    torch.save(cluster_to_tokens, "cluster_to_tokens.bin")
+
+
 if __name__ == "__main__":
     # Example usage
-    model, tokenizer = create_case_insensitive_bert_model(
+    model, tokenizer, old_to_new_idx = create_case_insensitive_bert_model(
         source_model_name="google-bert/bert-base-cased",
         output_dir="case-insensitive-bert",
-        similarity_threshold=0.9,
+        similarity_threshold=None,
         debug_file="merged_tokens.jsonl",
     )
+    with open("old_to_new_idx.json", "w") as f:
+        json.dump(old_to_new_idx, f)
