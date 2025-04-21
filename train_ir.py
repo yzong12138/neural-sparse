@@ -16,8 +16,9 @@ from scripts.data.collator import (
 from scripts.utils import set_logging, get_model
 from scripts.args import parse_args
 
+from torch.optim import AdamW
 from transformers import set_seed
-from transformers.optimization import AdamW, get_linear_schedule_with_warmup
+from transformers.optimization import get_linear_schedule_with_warmup
 
 logger = logging.getLogger(__name__)
 
