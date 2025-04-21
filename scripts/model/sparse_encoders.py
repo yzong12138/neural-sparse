@@ -3,7 +3,6 @@ import transformers
 import itertools
 import logging
 
-from .decomposition_bert import DecompBertConfig, DecompBertForMaskedLM
 from transformers import AutoModelForMaskedLM, BertForMaskedLM, AutoConfig
 
 logger = logging.getLogger(__name__)
@@ -54,9 +53,6 @@ class SparseModel(torch.nn.Module):
         preprocess_func=None,
     ):
         super().__init__()
-
-        AutoConfig.register("DecompBert", DecompBertConfig)
-        AutoModelForMaskedLM.register(DecompBertConfig, DecompBertForMaskedLM)
 
         if tokenizer_id is None:
             tokenizer_id = model_id
