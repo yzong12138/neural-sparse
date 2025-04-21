@@ -76,7 +76,7 @@ class SparseModel(torch.nn.Module):
             for token in self.tokenizer.special_tokens_map.values()
         ]
 
-        self.vocab_size = self.tokenizer.vocab_size
+        self.vocab_size = len(self.tokenizer.vocab)
         try:
             emb_vocab_size = self.backbone.new.embeddings.word_embeddings.weight.shape[
                 0
@@ -161,7 +161,7 @@ class SparseModel(torch.nn.Module):
 class SparsePostProcessor(object):
     def __init__(self, tokenizer):
         self.tokenizer = tokenizer
-        self.id_to_token = ["" for i in range(tokenizer.vocab_size + 100)]
+        self.id_to_token = ["" for i in range(len(tokenizer.vocab) + 100)]
         for token, _id in tokenizer.vocab.items():
             self.id_to_token[_id] = token
 
