@@ -2,12 +2,12 @@
 
 ### Conda environment
 ```
-conda create -n neural-sparse python=3.9
-conda activate neural-sparse
-conda install pytorch==1.11.0 cudatoolkit=10.2 -c pytorch
-conda install numpy
-conda install -c conda-forge accelerate transformers datasets
-pip install opensearch-py beir
+conda create -n neural-sparse-mdbert python=3.9
+conda activate neural-sparse-mdbert
+pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cu124
+pip install transformers==4.51.3 datasets==3.5.0 accelerate==1.6.0
+pip install numpy==2.0.2
+pip install opensearch-py==2.8.0 beir==2.1.0
 ```
 
 ### OpenSearch service
