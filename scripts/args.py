@@ -39,6 +39,7 @@ class DataTrainingArguments:
     use_two_phase: bool = field(default=False)
     skip_ingest: bool = field(default=False)
     query_prune: float = field(default=0)
+    flops_threshold: int = field(default=None)
 
     def __post_init__(self):
         return
