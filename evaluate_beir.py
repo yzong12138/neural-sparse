@@ -88,7 +88,7 @@ def main():
             )
 
         # search is only run on main process
-        if accelerator.is_local_main_process:
+        if data_args.do_search and accelerator.is_local_main_process:
             search_result = asyncio.run(
                 search(
                     queries=queries,
@@ -114,7 +114,7 @@ def main():
 
         accelerator.wait_for_everyone()
 
-    if accelerator.is_local_main_process:
+    if data_args.do_search and accelerator.is_local_main_process:
         df = pd.DataFrame(result)
         for key in ["flops", "q_length", "d_length", "NDCG@10"]:
             avg_res[key] = sum(result[key]) / len(result[key])

@@ -38,6 +38,7 @@ class DataTrainingArguments:
     first_rank_thresh: int = field(default=10000)
     use_two_phase: bool = field(default=False)
     skip_ingest: bool = field(default=False)
+    do_search: bool = field(default=True)
     query_prune: float = field(default=0)
     flops_threshold: int = field(default=None)
 
