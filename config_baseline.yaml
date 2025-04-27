@@ -2,9 +2,9 @@ logging_steps: 50
 # log_level_replica: info
 
 inf_free: true
-model_name_or_path: answerdotai/ModernBERT-base
-tokenizer_name: answerdotai/ModernBERT-base
-preprocess_func: blank_prefix_lower
+model_name_or_path: Alibaba-NLP/gte-en-mlm-base
+tokenizer_name: Alibaba-NLP/gte-en-mlm-base
+idf_path: idf.json
 
 max_seq_length: 256
 train_file: data/msmarco_ft
@@ -12,11 +12,12 @@ data_type: kd
 loss_types: [kldiv]
 sample_num_one_query: 2
 use_in_batch_negatives: false
-flops_d_lambda: 0.004
-flops_d_T: 10000
+flops_d_lambda: 0.03
+flops_d_T: 30000
 ranking_loss_weight: 1
+flops_threshold: 50
 
-output_dir: output/mdbert/mdbert-noidf
+output_dir: output/baselines/gte-en-mlm-idf-50
 per_device_eval_batch_size: 50
 per_device_train_batch_size: 20
 
