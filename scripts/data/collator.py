@@ -55,6 +55,62 @@ class KnowledgeDistillDataCollator:
         return result
 
 
+class KnowledgeDistillIdsDataCollator:
+    def __init__(self, tokenizer, max_length=512, teacher_tokenizer_ids=[]):
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+        self.tokenizers = [self.tokenizer] + [
+            transformers.AutoTokenizer.from_pretrained(tokenizer_id)
+            if tokenizer_id != ""
+            else None
+            for tokenizer_id in teacher_tokenizer_ids
+        ]
+        logger.info(f"total tokenizers {len(self.tokenizers)}")
+
+    # handle knowledge distillation input containing query, docs and scores
+    def __call__(self, batch):
+        q, q_id, docs, d_ids, scores = zip(*batch)
+
+        has_scores = list(scores)[0][0] is not None
+        assert len(docs) == len(scores)
+        docs = list(itertools.chain(*docs))
+        d_ids = list(itertools.chain(*d_ids))
+
+        result = {"query": [], "docs": []}
+
+        for tokenizer in self.tokenizers:
+            if tokenizer is None:
+                result["query"].append({"q_id": torch.tensor(list(q_id))})
+                result["docs"].append({"d_ids": torch.tensor(list(d_ids))})
+                continue
+
+            result["query"].append(
+                tokenizer(
+                    list(q),
+                    padding=True,
+                    truncation=True,
+                    max_length=self.max_length,
+                    return_tensors="pt",
+                    return_token_type_ids=False,
+                )
+            )
+            result["docs"].append(
+                tokenizer(
+                    docs,
+                    padding=True,
+                    truncation=True,
+                    max_length=self.max_length,
+                    return_tensors="pt",
+                    return_token_type_ids=False,
+                )
+            )
+
+        if has_scores:
+            result["scores"] = torch.tensor(scores)
+
+        return result
+
+
 class PosNegsDataCollator:
     def __init__(self, tokenizer, max_length=512, teacher_tokenizer_ids=[]):
         self.tokenizer = tokenizer
@@ -99,4 +155,8 @@ class PosNegsDataCollator:
         return result
 
 
-COLLATOR_CLS_MAP = {"kd": KnowledgeDistillDataCollator, "posnegs": PosNegsDataCollator}
+COLLATOR_CLS_MAP = {
+    "kd": KnowledgeDistillDataCollator,
+    "posnegs": PosNegsDataCollator,
+    "kd-ids": KnowledgeDistillIdsDataCollator,
+}

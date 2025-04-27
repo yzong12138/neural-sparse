@@ -1,7 +1,9 @@
+import os
 import torch
 import torch.nn.functional as F
 import transformers
 from scripts.utils import gather_rep
+from scripts.dynamo_utils import batch_get_vectors
 
 
 class BiSparseModel(torch.nn.Module):
@@ -54,8 +56,39 @@ class DenseModel(torch.nn.Module):
         return DenseModel.get_dense_embedding(output)
 
 
+class RemoteModel(torch.nn.Module):
+    @staticmethod
+    def from_pretrained(path):
+        return RemoteModel(path)
+
+    def __init__(self, model_id):
+        super().__init__()
+        self.model_id = model_id
+        assert "AWS_REGION_NAME" in os.environ
+        self.region_name = os.environ.get("AWS_REGION_NAME")
+
+    def forward(self, **kwargs):
+        if "q_id" in kwargs:
+            ids = kwargs["q_id"]
+            emb = batch_get_vectors(
+                "vector_q",
+                ids.cpu().numpy().tolist(),
+                model_id=int(self.model_id),
+                region_name=self.region_name,
+            )
+        else:
+            ids = kwargs["d_ids"]
+            emb = batch_get_vectors(
+                "vector",
+                ids.cpu().numpy().tolist(),
+                model_id=int(self.model_id),
+                region_name=self.region_name,
+            )
+        return torch.tensor(emb).to(ids.device)
+
+
 class BiEncoderWrapper:
-    CLS_MAP = {"sparse": BiSparseModel, "dense": DenseModel}
+    CLS_MAP = {"sparse": BiSparseModel, "dense": DenseModel, "remote": RemoteModel}
 
     def __init__(self, types, model_ids, score_scale=30, use_in_batch_negatives=False):
         assert len(types) == len(model_ids)
@@ -70,32 +103,6 @@ class BiEncoderWrapper:
             model = cls.from_pretrained(model_id)
             model.eval()
             self.models.append(model)
-
-    def get_scores(self, q_features, d_features):
-        scores = 0
-        with torch.no_grad():
-            for model in self.models:
-                q_rep = model(**q_features)
-                d_rep = model(**d_features)
-                if not self.use_in_batch_negatives:
-                    d_rep = d_rep.reshape(q_rep.shape[0], -1, d_rep.shape[-1])
-                    score = torch.bmm(
-                        d_rep, q_rep.reshape(q_rep.shape[0], q_rep.shape[-1], 1)
-                    ).squeeze()
-                else:
-                    d_rep = gather_rep(d_rep, self.accelerator)
-                    score = torch.matmul(q_rep, d_rep.t())
-
-                max_t = score.max(dim=1).values
-                min_t = score.min(dim=1).values
-                score = (score - min_t.unsqueeze(-1)) / (
-                    (max_t - min_t + 1e-6).unsqueeze(-1)
-                )
-                scores += score
-
-            scores = scores / len(self.models)
-
-        return scores * self.score_scale
 
     def get_scores_batch(self, q_features_list, d_features_list):
         assert len(q_features_list) == len(self.models)
