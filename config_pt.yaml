@@ -2,13 +2,13 @@ logging_steps: 50
 # log_level_replica: info
 
 inf_free: true
-model_name_or_path: distilbert/distilbert-base-uncased
-tokenizer_name: distilbert/distilbert-base-uncased
+model_name_or_path: Alibaba-NLP/gte-en-mlm-base
+tokenizer_name: Alibaba-NLP/gte-en-mlm-base
 idf_path: idf.json
 
 max_seq_length: 256
-train_file_dir: [data/pt-kd,data/beir-kd]
-data_type: kd
+train_file_dir: [data/pt-kd-ids]
+data_type: kd-ids
 loss_types: [kldiv]
 sample_num_one_query: 3
 use_in_batch_negatives: true
@@ -16,13 +16,13 @@ flops_d_lambda: 0.004
 flops_d_T: 10000
 ranking_loss_weight: 1
 kd_ensemble_teacher_kwargs:
-  types: ["dense", "sparse","dense"]
-  model_ids: ["Alibaba-NLP/gte-large-en-v1.5","opensearch-project/opensearch-neural-sparse-encoding-v1","sentence-transformers/msmarco-distilbert-base-tas-b"]
-  teacher_tokenizer_ids: ["Alibaba-NLP/gte-large-en-v1.5","opensearch-project/opensearch-neural-sparse-encoding-v1","sentence-transformers/msmarco-distilbert-base-tas-b"]
+  types: ["dense", "sparse", "remote"]
+  model_ids: ["Alibaba-NLP/gte-large-en-v1.5","opensearch-project/opensearch-neural-sparse-encoding-v1","0"]
+  teacher_tokenizer_ids: ["Alibaba-NLP/gte-large-en-v1.5","opensearch-project/opensearch-neural-sparse-encoding-v1","0"]
   score_scale: 30
 first_rank_thresh: 10
 
-output_dir: output/pt/v1-beir-GST
+output_dir: output/pt/with-0-llm
 per_device_eval_batch_size: 50
 per_device_train_batch_size: 15
 
@@ -34,6 +34,6 @@ weight_decay: 0.01
 lr_scheduler_type: linear
 warmup_steps: 6000
 save_strategy: steps
-save_steps: 50000
+save_steps: 200000
 dataloader_drop_last: true
 max_grad_norm: null

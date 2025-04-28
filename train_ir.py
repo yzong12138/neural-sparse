@@ -1,7 +1,10 @@
 import yaml
 import logging
 import os
+import requests
 import sys
+import subprocess
+import time
 from dataclasses import asdict
 
 from scripts.train.trainer import SparseModelTrainer
@@ -42,6 +45,28 @@ def main():
     set_logging(training_args, "train.log")
     set_seed(training_args.seed)
 
+    # set up embedding server
+    server_process = None
+    port = 9000 + training_args.local_rank
+    if (
+        len(data_args.kd_ensemble_teacher_kwargs) != 0
+        and "remote" in data_args.kd_ensemble_teacher_kwargs["types"]
+    ):
+        server_process = subprocess.Popen(
+            ["python", "scripts/async_embedding_server.py", "--port", str(port)],
+            stdout=open("server_output.log", "w"),
+            stderr=subprocess.STDOUT,
+        )
+
+        while server_process.poll() is not None:
+            time.sleep(1)
+            try:
+                logger.info(requests.get(f"http://localhost:{port}/health"))
+            except:
+                logger.info("waiting for embedding server to be started...")
+
+        logger.info(f"embedding server has been started at port {port}")
+
     # model
     model = get_model(model_args)
 
@@ -50,6 +75,7 @@ def main():
         model.tokenizer,
         data_args.max_seq_length,
         data_args.kd_ensemble_teacher_kwargs.get("teacher_tokenizer_ids", []),
+        port=port,
     )
     logger.info(f"data collator: {data_collator}")
 
@@ -128,4 +154,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    finally:
+        os.system("pkill -f async_embedding_server")

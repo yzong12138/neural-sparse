@@ -8,3 +8,7 @@ numpy==2.0.2
 opensearch-py==2.8.0
 beir==2.1.0
 ipykernel
+boto3
+uvicorn
+fastapi
+pydantic

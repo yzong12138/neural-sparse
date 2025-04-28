@@ -3,7 +3,7 @@ import logging
 import torch
 
 from ..model.sparse_encoders import SparseModel
-from .bi_encoder_wrapper import BiEncoderWrapper
+from .bi_encoder_wrapper import BiEncoderWrapper, RemoteModel
 from ..utils import gather_rep
 from ..data.dataset import CombinedRandomSampler, CombinedDataset
 
@@ -163,9 +163,12 @@ class SparseModelTrainer(Trainer):
             score_scale=self.data_args.kd_ensemble_teacher_kwargs.get(
                 "score_scale", 30
             ),
+            port=str(self.args.local_rank + 9000),
         )
         self.bi_encoder_teacher.accelerator = self.accelerator
         for i, model in enumerate(self.bi_encoder_teacher.models):
+            if isinstance(model, RemoteModel):
+                continue
             self._move_model_to_device(model, self.args.device)
             self.bi_encoder_teacher.models[i] = self._wrap_model(model, training=False)
             use_accelerator_prepare = (

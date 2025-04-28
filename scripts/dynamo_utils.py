@@ -1,7 +1,6 @@
 import boto3
 import numpy as np
 import time
-from boto3.dynamodb.types import Binary
 
 
 def batch_store_vectors_binary(
@@ -74,17 +73,27 @@ def batch_get_vectors(
     if not text_id_list:
         return []
 
+    text_id_list = [int(x) for x in text_id_list]
     dynamodb_client = boto3.client("dynamodb", region_name=region_name)
     model_id_str = str(model_id)
     result_vectors = [None] * len(text_id_list)  # 预分配结果列表，保持与输入顺序一致
 
-    # 创建text_id到索引的映射，用于保持结果顺序
-    id_to_index = {id_val: idx for idx, id_val in enumerate(text_id_list)}
+    # 去重text_id_list，同时保留原始索引信息
+    unique_text_ids = []
+    original_to_unique_map = {}  # 原始列表索引 -> 去重后列表索引的映射
 
-    # 分批处理
-    for batch_start in range(0, len(text_id_list), max_batch_size):
-        batch_end = min(batch_start + max_batch_size, len(text_id_list))
-        batch_ids = text_id_list[batch_start:batch_end]
+    for idx, text_id in enumerate(text_id_list):
+        if text_id not in original_to_unique_map:
+            original_to_unique_map[text_id] = len(unique_text_ids)
+            unique_text_ids.append(text_id)
+
+    # 创建一个字典存储获取到的向量，以text_id为键
+    id_to_vector = {}
+
+    # 分批处理去重后的ID列表
+    for batch_start in range(0, len(unique_text_ids), max_batch_size):
+        batch_end = min(batch_start + max_batch_size, len(unique_text_ids))
+        batch_ids = unique_text_ids[batch_start:batch_end]
 
         # 构建批量获取请求
         keys_list = [
@@ -111,9 +120,8 @@ def batch_get_vectors(
                 vector_binary = item["vector"]["B"]
                 vector = np.frombuffer(vector_binary, dtype=dtype)
 
-                # 使用映射找到正确的位置
-                if text_id in id_to_index:
-                    result_vectors[id_to_index[text_id]] = vector
+                # 存储向量，以text_id为键
+                id_to_vector[text_id] = vector
 
         # 处理未处理的键
         unprocessed_keys = (
@@ -147,8 +155,8 @@ def batch_get_vectors(
                     vector_binary = item["vector"]["B"]
                     vector = np.frombuffer(vector_binary, dtype=dtype)
 
-                    if text_id in id_to_index:
-                        result_vectors[id_to_index[text_id]] = vector
+                    # 存储向量
+                    id_to_vector[text_id] = vector
 
             unprocessed_keys = (
                 retry_response.get("UnprocessedKeys", {})
@@ -158,5 +166,10 @@ def batch_get_vectors(
 
         if unprocessed_keys:
             raise Exception(f"警告：有{len(unprocessed_keys)}个键未能成功读取")
+
+    # 将结果按照原始text_id_list的顺序填充到result_vectors
+    for idx, text_id in enumerate(text_id_list):
+        if text_id in id_to_vector:
+            result_vectors[idx] = id_to_vector[text_id]
 
     return np.array(result_vectors)
