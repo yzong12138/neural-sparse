@@ -1,9 +1,12 @@
 import os
+import requests
 import torch
-import torch.nn.functional as F
 import transformers
+import numpy as np
 from scripts.utils import gather_rep
-from scripts.dynamo_utils import batch_get_vectors
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class BiSparseModel(torch.nn.Module):
@@ -70,27 +73,32 @@ class RemoteModel(torch.nn.Module):
     def forward(self, **kwargs):
         if "q_id" in kwargs:
             ids = kwargs["q_id"]
-            emb = batch_get_vectors(
-                "vector_q",
-                ids.cpu().numpy().tolist(),
-                model_id=int(self.model_id),
-                region_name=self.region_name,
-            )
+            table_name = "vector_q"
         else:
             ids = kwargs["d_ids"]
-            emb = batch_get_vectors(
-                "vector",
-                ids.cpu().numpy().tolist(),
-                model_id=int(self.model_id),
-                region_name=self.region_name,
-            )
+            table_name = "vector"
+
+        response = requests.post(
+            f"http://localhost:{self.port}/fetch_embedding",
+            json={
+                "ids": ids.cpu().numpy().tolist(),
+                "table_name": table_name,
+                "model_id": self.model_id,
+            },
+        )
+        assert response.status_code == 200
+        emb = np.frombuffer(response.content, dtype=np.float16).reshape(
+            ids.shape[0], -1
+        )
         return torch.tensor(emb).to(ids.device)
 
 
 class BiEncoderWrapper:
     CLS_MAP = {"sparse": BiSparseModel, "dense": DenseModel, "remote": RemoteModel}
 
-    def __init__(self, types, model_ids, score_scale=30, use_in_batch_negatives=False):
+    def __init__(
+        self, types, model_ids, score_scale=30, use_in_batch_negatives=False, port=9000
+    ):
         assert len(types) == len(model_ids)
         assert len(types) != 0
         self.score_scale = score_scale
@@ -102,6 +110,8 @@ class BiEncoderWrapper:
             cls = BiEncoderWrapper.CLS_MAP[type]
             model = cls.from_pretrained(model_id)
             model.eval()
+            if isinstance(model, RemoteModel):
+                model.port = port
             self.models.append(model)
 
     def get_scores_batch(self, q_features_list, d_features_list):
@@ -126,6 +136,10 @@ class BiEncoderWrapper:
                     (max_t - min_t + 1e-6).unsqueeze(-1)
                 )
                 scores += score
+                # idx = [i for i in range(q_rep.shape[0])]
+                # idx_j = [i * 3 for i in range(q_rep.shape[0])]
+                # logger.info(score[idx, idx_j].mean())
+                # logger.info(score.max(dim=-1).indices)
 
             scores = scores / len(self.models)
 

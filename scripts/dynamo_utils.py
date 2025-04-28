@@ -73,6 +73,7 @@ def batch_get_vectors(
     if not text_id_list:
         return []
 
+    text_id_list = [int(x) for x in text_id_list]
     dynamodb_client = boto3.client("dynamodb", region_name=region_name)
     model_id_str = str(model_id)
     result_vectors = [None] * len(text_id_list)  # 预分配结果列表，保持与输入顺序一致

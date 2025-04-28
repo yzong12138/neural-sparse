@@ -1,6 +1,7 @@
 import torch
 import itertools
 import logging
+import requests
 
 import transformers
 
@@ -8,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class KnowledgeDistillDataCollator:
-    def __init__(self, tokenizer, max_length=512, teacher_tokenizer_ids=[]):
+    def __init__(self, tokenizer, max_length=512, teacher_tokenizer_ids=[], **kwargs):
         self.tokenizer = tokenizer
         self.max_length = max_length
         self.tokenizers = [self.tokenizer] + [
@@ -16,6 +17,7 @@ class KnowledgeDistillDataCollator:
             for tokenizer_id in teacher_tokenizer_ids
         ]
         logger.info(f"total tokenizers {len(self.tokenizers)}")
+        logger.info(f"unused args: {kwargs}")
 
     # handle knowledge distillation input containing query, docs and scores
     def __call__(self, batch):
@@ -56,15 +58,16 @@ class KnowledgeDistillDataCollator:
 
 
 class KnowledgeDistillIdsDataCollator:
-    def __init__(self, tokenizer, max_length=512, teacher_tokenizer_ids=[]):
+    def __init__(self, tokenizer, max_length=512, teacher_tokenizer_ids=[], port=9000):
         self.tokenizer = tokenizer
         self.max_length = max_length
         self.tokenizers = [self.tokenizer] + [
             transformers.AutoTokenizer.from_pretrained(tokenizer_id)
-            if tokenizer_id != ""
-            else None
+            if not tokenizer_id.isdigit()
+            else int(tokenizer_id)
             for tokenizer_id in teacher_tokenizer_ids
         ]
+        self.port = port
         logger.info(f"total tokenizers {len(self.tokenizers)}")
 
     # handle knowledge distillation input containing query, docs and scores
@@ -79,9 +82,21 @@ class KnowledgeDistillIdsDataCollator:
         result = {"query": [], "docs": []}
 
         for tokenizer in self.tokenizers:
-            if tokenizer is None:
-                result["query"].append({"q_id": torch.tensor(list(q_id))})
-                result["docs"].append({"d_ids": torch.tensor(list(d_ids))})
+            if isinstance(tokenizer, int):
+                q_id = list(q_id)
+                d_ids = list(d_ids)
+
+                requests.post(
+                    f"http://localhost:{self.port}/register_task",
+                    json={"ids": q_id, "table_name": "vector_q", "model_id": tokenizer},
+                )
+                requests.post(
+                    f"http://localhost:{self.port}/register_task",
+                    json={"ids": d_ids, "table_name": "vector", "model_id": tokenizer},
+                )
+
+                result["query"].append({"q_id": torch.tensor(q_id)})
+                result["docs"].append({"d_ids": torch.tensor(d_ids)})
                 continue
 
             result["query"].append(
@@ -112,7 +127,7 @@ class KnowledgeDistillIdsDataCollator:
 
 
 class PosNegsDataCollator:
-    def __init__(self, tokenizer, max_length=512, teacher_tokenizer_ids=[]):
+    def __init__(self, tokenizer, max_length=512, teacher_tokenizer_ids=[], **kwargs):
         self.tokenizer = tokenizer
         self.max_length = max_length
         self.tokenizers = [self.tokenizer] + [
@@ -120,6 +135,7 @@ class PosNegsDataCollator:
             for tokenizer_id in teacher_tokenizer_ids
         ]
         logger.info(f"total tokenizers {len(self.tokenizers)}")
+        logger.info(f"unused args: {kwargs}")
 
     def __call__(self, batch):
         q, pos, negs = zip(*batch)

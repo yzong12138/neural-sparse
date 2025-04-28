@@ -18,7 +18,7 @@ ranking_loss_weight: 1
 kd_ensemble_teacher_kwargs:
   types: ["dense", "sparse", "remote"]
   model_ids: ["Alibaba-NLP/gte-large-en-v1.5","opensearch-project/opensearch-neural-sparse-encoding-v1","0"]
-  teacher_tokenizer_ids: ["Alibaba-NLP/gte-large-en-v1.5","opensearch-project/opensearch-neural-sparse-encoding-v1",""]
+  teacher_tokenizer_ids: ["Alibaba-NLP/gte-large-en-v1.5","opensearch-project/opensearch-neural-sparse-encoding-v1","0"]
   score_scale: 30
 first_rank_thresh: 10
 
