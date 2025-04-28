@@ -31,6 +31,9 @@ def parse_arguments():
     parser.add_argument(
         "--table", "-t", type=str, default="vector", help="DynamoDB table name"
     )
+    parser.add_argument(
+        "--model", "-m", type=int, default=0, help="DynamoDB table model_id"
+    )
     return parser.parse_args()
 
 
@@ -53,7 +56,7 @@ def main():
 
     for data in tqdm(l):
         vector_ids, vectors = data
-        batch_store_vectors_binary(table_name, vector_ids, vectors)
+        batch_store_vectors_binary(table_name, vector_ids, vectors, model_id=args.model)
 
 
 if __name__ == "__main__":

@@ -8,7 +8,8 @@ from accelerate import Accelerator
 from transformers import AutoModel, AutoTokenizer
 from tqdm import tqdm
 
-from bge_en_icl import get_query_embeddings, get_document_embeddings
+# from bge_en_icl import get_query_embeddings, get_document_embeddings
+from inf_retriever import get_query_embeddings, get_document_embeddings
 from torch.utils.data import DataLoader, Dataset
 
 
@@ -26,10 +27,10 @@ logger = get_logger_console(__name__)
 
 
 class TextToIdDataset(Dataset):
-    def __init__(self, text_to_id):
+    def __init__(self, text_to_id, last_id=-1):
         text_id_pairs = text_to_id.items()
-        self.keys = sorted([_id for text, _id in text_id_pairs])
-        self.data = {_id: text for text, _id in text_id_pairs}
+        self.keys = sorted([_id for text, _id in text_id_pairs if _id >= last_id])
+        self.data = {_id: text for text, _id in text_id_pairs if _id >= last_id}
 
     def __len__(self):
         return len(self.data)
@@ -69,14 +70,20 @@ class DDPDatasetWithRank(Dataset):
 
 query_to_id_path = "../data/query_to_id.bin"
 doc_to_id_path = "../data/doc_to_id.bin"
-query_save_path = "/opt/dlami/nvme/bge/queries/"
-doc_save_path = "/opt/dlami/nvme/bge/docs/"
+query_save_path = "/opt/dlami/nvme/inf/queries/"
+doc_save_path = "/opt/dlami/nvme/inf/docs/"
 batch_size = 30
+last_q_id = -1
+last_d_id = -1
 
 
 def main():
-    tokenizer = AutoTokenizer.from_pretrained("BAAI/bge-en-icl")
-    model = AutoModel.from_pretrained("BAAI/bge-en-icl")
+    # tokenizer = AutoTokenizer.from_pretrained("BAAI/bge-en-icl")
+    # model = AutoModel.from_pretrained("BAAI/bge-en-icl")
+    tokenizer = AutoTokenizer.from_pretrained(
+        "infly/inf-retriever-v1", trust_remote_code=True
+    )
+    model = AutoModel.from_pretrained("infly/inf-retriever-v1", trust_remote_code=True)
 
     accelerator = Accelerator(mixed_precision="fp16")
     accelerator.prepare(model)
@@ -89,7 +96,7 @@ def main():
         query_to_id = pickle.load(f)
 
     ddp_dataset = DDPDatasetWithRank(
-        TextToIdDataset(query_to_id),
+        TextToIdDataset(query_to_id, last_q_id),
         accelerator.local_process_index,
         accelerator.num_processes,
     )
@@ -108,7 +115,7 @@ def main():
         doc_to_id = pickle.load(f)
 
     ddp_dataset = DDPDatasetWithRank(
-        TextToIdDataset(doc_to_id),
+        TextToIdDataset(doc_to_id, last_d_id),
         accelerator.local_process_index,
         accelerator.num_processes,
     )

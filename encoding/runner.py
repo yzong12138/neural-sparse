@@ -13,24 +13,35 @@ def run_processes():
             "python",
             "upload_worker.py",
             "-f",
-            f"/opt/dlami/nvme/bge/docs/{i}.bin",
+            f"/opt/dlami/nvme/inf/docs/{i}.bin",
             "-t",
             "vector",
+            "-m",
+            "1",
         ]
 
         process = subprocess.Popen(cmd)
         processes.append(process)
         print(
-            f"Started process for file /opt/dlami/nvme/bge/docs/{i}.bin with PID {process.pid}"
+            f"Started process for file /opt/dlami/nvme/inf/docs/{i}.bin with PID {process.pid}"
         )
 
-        # cmd = ["python", "upload_worker.py", "-f", f"/opt/dlami/nvme/bge/queries/{i}.bin", "-t", "vector_q"]
+        cmd = [
+            "python",
+            "upload_worker.py",
+            "-f",
+            f"/opt/dlami/nvme/inf/queries/{i}.bin",
+            "-t",
+            "vector_q",
+            "-m",
+            "1",
+        ]
 
-        # process = subprocess.Popen(
-        #     cmd
-        # )
-        # processes.append(process)
-        # print(f"Started process for file /opt/dlami/nvme/bge/queries/{i}.bin with PID {process.pid}")
+        process = subprocess.Popen(cmd)
+        processes.append(process)
+        print(
+            f"Started process for file /opt/dlami/nvme/inf/queries/{i}.bin with PID {process.pid}"
+        )
 
     # 处理信号，确保清理子进程
     def signal_handler(signum, frame):
