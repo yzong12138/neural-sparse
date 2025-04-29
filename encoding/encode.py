@@ -8,8 +8,7 @@ from accelerate import Accelerator
 from transformers import AutoModel, AutoTokenizer
 from tqdm import tqdm
 
-# from bge_en_icl import get_query_embeddings, get_document_embeddings
-from inf_retriever import get_query_embeddings, get_document_embeddings
+from zeta import get_query_embeddings, get_document_embeddings
 from torch.utils.data import DataLoader, Dataset
 
 
@@ -70,20 +69,16 @@ class DDPDatasetWithRank(Dataset):
 
 query_to_id_path = "../data/query_to_id.bin"
 doc_to_id_path = "../data/doc_to_id.bin"
-query_save_path = "/opt/dlami/nvme/inf/queries/"
-doc_save_path = "/opt/dlami/nvme/inf/docs/"
+query_save_path = "/opt/dlami/nvme/zeta/queries/"
+doc_save_path = "/opt/dlami/nvme/zeta/docs/"
 batch_size = 30
 last_q_id = -1
 last_d_id = -1
 
 
 def main():
-    # tokenizer = AutoTokenizer.from_pretrained("BAAI/bge-en-icl")
-    # model = AutoModel.from_pretrained("BAAI/bge-en-icl")
-    tokenizer = AutoTokenizer.from_pretrained(
-        "infly/inf-retriever-v1", trust_remote_code=True
-    )
-    model = AutoModel.from_pretrained("infly/inf-retriever-v1", trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained("zeta-alpha-ai/Zeta-Alpha-E5-Mistral")
+    model = AutoModel.from_pretrained("zeta-alpha-ai/Zeta-Alpha-E5-Mistral")
 
     accelerator = Accelerator(mixed_precision="fp16")
     accelerator.prepare(model)
