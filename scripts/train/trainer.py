@@ -155,7 +155,7 @@ class SparseModelTrainer(Trainer):
                 safe_serialization=self.args.save_safetensors,
             )
 
-    def set_bi_encoder_teacher(self):
+    def set_bi_encoder_teacher(self, embedding_service=None):
         self.bi_encoder_teacher = BiEncoderWrapper(
             types=self.data_args.kd_ensemble_teacher_kwargs["types"],
             model_ids=self.data_args.kd_ensemble_teacher_kwargs["model_ids"],
@@ -163,7 +163,7 @@ class SparseModelTrainer(Trainer):
             score_scale=self.data_args.kd_ensemble_teacher_kwargs.get(
                 "score_scale", 30
             ),
-            port=str(self.args.local_rank + 9000),
+            embedding_service=embedding_service,
         )
         self.bi_encoder_teacher.accelerator = self.accelerator
         for i, model in enumerate(self.bi_encoder_teacher.models):

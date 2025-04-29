@@ -6,7 +6,7 @@ model_name_or_path: Alibaba-NLP/gte-en-mlm-base
 tokenizer_name: Alibaba-NLP/gte-en-mlm-base
 idf_path: idf.json
 
-max_seq_length: 256
+max_seq_length: 512
 train_file_dir: [data/pt-kd-ids]
 data_type: kd-ids
 loss_types: [kldiv]
@@ -22,7 +22,7 @@ kd_ensemble_teacher_kwargs:
   score_scale: 30
 first_rank_thresh: 10
 
-output_dir: output/pt/with-0-llm
+output_dir: output/pt/with-0-llm-512
 per_device_eval_batch_size: 50
 per_device_train_batch_size: 15
 

@@ -18,6 +18,7 @@ from scripts.data.collator import (
 )
 from scripts.utils import set_logging, get_model
 from scripts.args import parse_args
+from scripts.async_embedding_server import EmbeddingService
 
 from torch.optim import AdamW
 from transformers import set_seed
@@ -46,26 +47,14 @@ def main():
     set_seed(training_args.seed)
 
     # set up embedding server
-    server_process = None
-    port = 9000 + training_args.local_rank
+    embedding_service = None
     if (
         len(data_args.kd_ensemble_teacher_kwargs) != 0
         and "remote" in data_args.kd_ensemble_teacher_kwargs["types"]
     ):
-        server_process = subprocess.Popen(
-            ["python", "scripts/async_embedding_server.py", "--port", str(port)],
-            stdout=open("server_output.log", "w"),
-            stderr=subprocess.STDOUT,
-        )
-
-        while server_process.poll() is not None:
-            time.sleep(1)
-            try:
-                logger.info(requests.get(f"http://localhost:{port}/health"))
-            except:
-                logger.info("waiting for embedding server to be started...")
-
-        logger.info(f"embedding server has been started at port {port}")
+        embedding_service = EmbeddingService()
+        logger.info(embedding_service.health_check())
+        logger.info(f"embedding service has been started.")
 
     # model
     model = get_model(model_args)
@@ -75,7 +64,7 @@ def main():
         model.tokenizer,
         data_args.max_seq_length,
         data_args.kd_ensemble_teacher_kwargs.get("teacher_tokenizer_ids", []),
-        port=port,
+        embedding_service=embedding_service,
     )
     logger.info(f"data collator: {data_collator}")
 
@@ -149,7 +138,7 @@ def main():
 
     if len(data_args.kd_ensemble_teacher_kwargs) != 0:
         logger.info(f"Set bi-encoder teacher. {data_args.kd_ensemble_teacher_kwargs}")
-        trainer.set_bi_encoder_teacher()
+        trainer.set_bi_encoder_teacher(embedding_service=embedding_service)
     trainer.train()
 
 

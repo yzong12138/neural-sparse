@@ -58,16 +58,24 @@ class KnowledgeDistillDataCollator:
 
 
 class KnowledgeDistillIdsDataCollator:
-    def __init__(self, tokenizer, max_length=512, teacher_tokenizer_ids=[], port=9000):
+    def __init__(
+        self,
+        tokenizer,
+        max_length=512,
+        teacher_tokenizer_ids=[],
+        embedding_service=None,
+    ):
         self.tokenizer = tokenizer
         self.max_length = max_length
         self.tokenizers = [self.tokenizer] + [
-            transformers.AutoTokenizer.from_pretrained(tokenizer_id)
-            if not tokenizer_id.isdigit()
-            else int(tokenizer_id)
+            (
+                transformers.AutoTokenizer.from_pretrained(tokenizer_id)
+                if not tokenizer_id.isdigit()
+                else int(tokenizer_id)
+            )
             for tokenizer_id in teacher_tokenizer_ids
         ]
-        self.port = port
+        self.embedding_service = embedding_service
         logger.info(f"total tokenizers {len(self.tokenizers)}")
 
     # handle knowledge distillation input containing query, docs and scores
@@ -86,13 +94,11 @@ class KnowledgeDistillIdsDataCollator:
                 q_id = list(q_id)
                 d_ids = list(d_ids)
 
-                requests.post(
-                    f"http://localhost:{self.port}/register_task",
-                    json={"ids": q_id, "table_name": "vector_q", "model_id": tokenizer},
+                self.embedding_service.register_task(
+                    table_name="vector_q", model_id=tokenizer, ids=q_id
                 )
-                requests.post(
-                    f"http://localhost:{self.port}/register_task",
-                    json={"ids": d_ids, "table_name": "vector", "model_id": tokenizer},
+                self.embedding_service.register_task(
+                    table_name="vector", model_id=tokenizer, ids=d_ids
                 )
 
                 result["query"].append({"q_id": torch.tensor(q_id)})

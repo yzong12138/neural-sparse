@@ -69,6 +69,7 @@ class RemoteModel(torch.nn.Module):
         self.model_id = model_id
         assert "AWS_REGION_NAME" in os.environ
         self.region_name = os.environ.get("AWS_REGION_NAME")
+        self.embedding_service = None
 
     def forward(self, **kwargs):
         if "q_id" in kwargs:
@@ -78,18 +79,12 @@ class RemoteModel(torch.nn.Module):
             ids = kwargs["d_ids"]
             table_name = "vector"
 
-        response = requests.post(
-            f"http://localhost:{self.port}/fetch_embedding",
-            json={
-                "ids": ids.cpu().numpy().tolist(),
-                "table_name": table_name,
-                "model_id": self.model_id,
-            },
+        emb = self.embedding_service.fetch_embedding(
+            table_name=table_name,
+            model_id=self.model_id,
+            ids=ids.cpu().numpy().tolist(),
         )
-        assert response.status_code == 200
-        emb = np.frombuffer(response.content, dtype=np.float16).reshape(
-            ids.shape[0], -1
-        )
+        emb = emb.reshape(ids.shape[0], -1)
         return torch.tensor(emb).to(ids.device)
 
 
@@ -97,7 +92,12 @@ class BiEncoderWrapper:
     CLS_MAP = {"sparse": BiSparseModel, "dense": DenseModel, "remote": RemoteModel}
 
     def __init__(
-        self, types, model_ids, score_scale=30, use_in_batch_negatives=False, port=9000
+        self,
+        types,
+        model_ids,
+        score_scale=30,
+        use_in_batch_negatives=False,
+        embedding_service=None,
     ):
         assert len(types) == len(model_ids)
         assert len(types) != 0
@@ -111,7 +111,7 @@ class BiEncoderWrapper:
             model = cls.from_pretrained(model_id)
             model.eval()
             if isinstance(model, RemoteModel):
-                model.port = port
+                model.embedding_service = embedding_service
             self.models.append(model)
 
     def get_scores_batch(self, q_features_list, d_features_list):
