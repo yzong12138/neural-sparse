@@ -113,12 +113,14 @@ class SparseModel(torch.nn.Module):
                 output * kwargs.get("attention_mask").unsqueeze(-1), dim=1
             )
             values = torch.log(1 + torch.relu(values))
+            values = torch.log(1 + torch.relu(values))
             if self.prune_ratio is None:
                 return values
             else:
                 max_values = values.max(dim=-1)[0].unsqueeze(1) * self.prune_ratio
                 return values * (values > max_values)
 
+        assert 0
         batch_size = kwargs["input_ids"].size(0)
         split_sizes = [batch_size // self.split_batch] * self.split_batch
         remainder = batch_size % self.split_batch
