@@ -9,6 +9,12 @@ for CONFIG_PATH in "${CONFIG_FILES[@]}"
 do
     echo "Processing config file: $CONFIG_PATH"
     
+    # Check if config file exists
+    if [ ! -f "$CONFIG_PATH" ]; then
+        echo "Config file not found: $CONFIG_PATH. Skipping..."
+        continue
+    fi
+    
     # Extract parameters from config file
     OUTPUT_DIR=$(grep "^output_dir:" "$CONFIG_PATH" | sed "s/^output_dir: //")
     MAX_STEPS=$(grep "^max_steps:" "$CONFIG_PATH" | sed "s/^max_steps: //")
@@ -26,6 +32,15 @@ do
         IDF_PATH="null"
     fi
     echo "IDF_PATH: $IDF_PATH"
+
+    # Handle use_l0 parameter
+    USE_L0=$(grep "^use_l0:" "$CONFIG_PATH" | sed "s/^use_l0: //")
+    if [ -n "$USE_L0" ]; then
+        USE_L0=$USE_L0
+    else
+        USE_L0="true"
+    fi
+    echo "USE_L0: $USE_L0"
 
     # Handle preprocess function
     PREPROCESS_FUNC=$(grep "^preprocess_func:" "$CONFIG_PATH" | sed "s/^preprocess_func: //")
@@ -49,7 +64,8 @@ do
           --log_level info \
           --per_device_eval_batch_size 50 \
           --idf_path $IDF_PATH \
-          --preprocess_func $PREPROCESS_FUNC
+          --preprocess_func $PREPROCESS_FUNC \
+          --use_l0 $USE_L0
     done
 
     echo "Completed processing $CONFIG_PATH"

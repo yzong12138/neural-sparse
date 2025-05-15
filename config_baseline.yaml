@@ -2,9 +2,10 @@ logging_steps: 50
 # log_level_replica: info
 
 inf_free: true
-model_name_or_path: output/pt/with-01-llm/checkpoint-200000
-tokenizer_name: output/pt/with-01-llm/checkpoint-200000
+model_name_or_path: output/pt/with-45-llm/checkpoint-200000
+tokenizer_name: output/pt/with-45-llm/checkpoint-200000
 idf_path: idf.json
+use_l0: true
 
 max_seq_length: 256
 train_file: data/msmarco_ft3
@@ -17,7 +18,7 @@ flops_d_T: 10000
 ranking_loss_weight: 1
 flops_threshold: 100
 
-output_dir: output/baselines-pt/with-01-llm/ft3-0.08-l0-100
+output_dir: output/baselines-pt/with-45-llm/ft3
 per_device_eval_batch_size: 50
 per_device_train_batch_size: 30
 

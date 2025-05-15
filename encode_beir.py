@@ -77,10 +77,11 @@ model_path = "wyw"
 batch_size = 50
 save_path = "encoding/msmarco-wyw"
 max_length = 256
+use_l0 = False
 
 
 def main():
-    model = SparseModel(model_path)
+    model = SparseModel(model_path, use_l0=use_l0)
 
     accelerator = Accelerator(mixed_precision="fp16")
     accelerator.prepare(model)

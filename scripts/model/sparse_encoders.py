@@ -3,8 +3,6 @@ import transformers
 import itertools
 import logging
 
-from transformers import AutoModelForMaskedLM, BertForMaskedLM, AutoConfig
-
 logger = logging.getLogger(__name__)
 
 
@@ -51,6 +49,7 @@ class SparseModel(torch.nn.Module):
         idf_requires_grad=False,
         prune_ratio=None,
         preprocess_func=None,
+        use_l0=True,
     ):
         super().__init__()
 
@@ -97,7 +96,8 @@ class SparseModel(torch.nn.Module):
         self.split_batch = split_batch
         self.idf_requires_grad = idf_requires_grad
         self.prune_ratio = prune_ratio
-        logger.info(f"model prune ratio: {prune_ratio}")
+        self.use_l0 = use_l0
+        logger.info(f"model prune ratio: {self.prune_ratio}, use l0: {self.use_l0}")
 
     def forward(self, inf_free=False, **kwargs):
         # input kwargs is the features from tokenizer
@@ -112,8 +112,9 @@ class SparseModel(torch.nn.Module):
             values, _ = torch.max(
                 output * kwargs.get("attention_mask").unsqueeze(-1), dim=1
             )
-            values = torch.log(1 + torch.relu(values))
-            values = torch.log(1 + torch.relu(values))
+            values = torch.log1p(torch.relu(values))
+            if self.use_l0:
+                values = torch.log1p(values)
             if self.prune_ratio is None:
                 return values
             else:
@@ -121,31 +122,6 @@ class SparseModel(torch.nn.Module):
                 return values * (values > max_values)
 
         assert 0
-        batch_size = kwargs["input_ids"].size(0)
-        split_sizes = [batch_size // self.split_batch] * self.split_batch
-        remainder = batch_size % self.split_batch
-        for i in range(remainder):
-            split_sizes[i] += 1
-
-        outputs = []
-        start = 0
-        assert isinstance(self.backbone, BertForMaskedLM)
-
-        attention_mask = kwargs.get("attention_mask")
-        output = self.backbone.bert(**kwargs)[0]
-        output = self.backbone.cls.predictions.transform(output)
-        for split_size in split_sizes:
-            end = start + split_size
-            values = self.backbone.cls.predictions.decoder(output[start:end])
-            values, _ = torch.max(
-                values * attention_mask[start:end].unsqueeze(-1), dim=1
-            )
-            outputs.append(values)
-            start = end
-
-        output = torch.cat(outputs, dim=0)
-        output = torch.log(1 + torch.relu(output))
-        return output
 
     def _encode_inf_free(self, **kwargs):
         input_ids = kwargs.get("input_ids")

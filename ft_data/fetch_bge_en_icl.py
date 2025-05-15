@@ -18,15 +18,14 @@ def transform_str(s):
         pass
     return s
 
+
 def main(args):
     with open("search_res.json") as f:
         search_res = json.load(f)
 
     print(search_res[0])
 
-    beir_resource_url = (
-        f"https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/msmarco.zip"
-    )
+    beir_resource_url = f"https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/msmarco.zip"
     local_data_path = util.download_and_unzip(beir_resource_url, "../data/beir")
     corpus, queries, qrels = GenericDataLoader(data_folder=local_data_path).load(
         split="train"
@@ -62,6 +61,7 @@ def main(args):
 
     all_scores = np.array(all_scores).astype(np.float64)
     np.save(args.output, all_scores)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

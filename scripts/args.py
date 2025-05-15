@@ -56,6 +56,7 @@ class ModelArguments:
     idf_requires_grad: Optional[bool] = field(default=False)
     prune_ratio: Optional[float] = field(default=None)
     preprocess_func: Optional[str] = field(default=None)
+    use_l0: bool = field(default=True)
 
     def __post_init__(self):
         if self.tokenizer_name is None:

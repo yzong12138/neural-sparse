@@ -5,8 +5,9 @@ inf_free: true
 model_name_or_path: Alibaba-NLP/gte-en-mlm-base
 tokenizer_name: Alibaba-NLP/gte-en-mlm-base
 idf_path: idf.json
+use_l0: false
 
-max_seq_length: 512
+max_seq_length: 256
 train_file_dir: [data/pt-kd-ids]
 data_type: kd-ids
 loss_types: [kldiv]
@@ -16,13 +17,13 @@ flops_d_lambda: 0.004
 flops_d_T: 10000
 ranking_loss_weight: 1
 kd_ensemble_teacher_kwargs:
-  types: ["dense", "sparse", "remote"]
-  model_ids: ["Alibaba-NLP/gte-large-en-v1.5","opensearch-project/opensearch-neural-sparse-encoding-v1","0"]
-  teacher_tokenizer_ids: ["Alibaba-NLP/gte-large-en-v1.5","opensearch-project/opensearch-neural-sparse-encoding-v1","0"]
+  types: ["dense", "sparse", "remote", "remote"]
+  model_ids: ["Alibaba-NLP/gte-large-en-v1.5","opensearch-project/opensearch-neural-sparse-encoding-v1","4", "5"]
+  teacher_tokenizer_ids: ["Alibaba-NLP/gte-large-en-v1.5","opensearch-project/opensearch-neural-sparse-encoding-v1","4", "5"]
   score_scale: 30
 first_rank_thresh: 10
 
-output_dir: output/pt/with-0-llm-512
+output_dir: output/pt/with-45-llm
 per_device_eval_batch_size: 50
 per_device_train_batch_size: 15
 
@@ -36,4 +37,3 @@ warmup_steps: 6000
 save_strategy: steps
 save_steps: 200000
 dataloader_drop_last: true
-max_grad_norm: null

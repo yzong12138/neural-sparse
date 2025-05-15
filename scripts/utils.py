@@ -60,6 +60,7 @@ def get_model(model_args):
         idf_requires_grad=model_args.idf_requires_grad,
         prune_ratio=model_args.prune_ratio,
         preprocess_func=model_args.preprocess_func,
+        use_l0=model_args.use_l0,
     )
 
     return model

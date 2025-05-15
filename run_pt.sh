@@ -19,6 +19,14 @@ fi
 
 echo "IDF_PATH: $IDF_PATH"
 
+USE_L0=$(grep "^use_l0:" "$CONFIG_PATH" | sed "s/^use_l0: //")
+if [ -n "$USE_L0" ]; then
+    USE_L0=$USE_L0
+else
+    USE_L0="true"
+fi
+echo "USE_L0: $USE_L0"
+
 torchrun --nproc_per_node=${N_DEVICES} train_ir.py $CONFIG_PATH
 
 for step in {$MAX_STEPS,}
@@ -30,5 +38,6 @@ torchrun --nproc_per_node=${N_DEVICES} evaluate_beir.py \
   --log_level info \
   --per_device_eval_batch_size 50 \
   --idf_path $IDF_PATH \
-  --beir_datasets nfcorpus,trec-covid
+  --beir_datasets nfcorpus,trec-covid \
+  --use_l0 $USE_L0
 done
