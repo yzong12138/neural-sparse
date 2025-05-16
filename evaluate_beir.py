@@ -118,16 +118,25 @@ def main():
         df = pd.DataFrame(result)
         for key in ["flops", "q_length", "d_length", "NDCG@10"]:
             avg_res[key] = sum(result[key]) / len(result[key])
+
+        suffix = "_2p" if data_args.use_two_phase else ""
+        suffix = suffix + (
+            f"_{data_args.query_prune}" if data_args.query_prune > 0 else ""
+        )
+        suffix = suffix + (
+            f"_{data_args.max_seq_length}" if data_args.max_seq_length != 512 else ""
+        )
+
         df.to_csv(
             os.path.join(
                 beir_eval_dir,
-                f"beir_statictics{'_2p' if data_args.use_two_phase else ''}{f'_{data_args.query_prune}' if data_args.query_prune>0 else ''}.csv",
+                f"beir_statictics{suffix}'.csv",
             )
         )
         with open(
             os.path.join(
                 beir_eval_dir,
-                f"avg_res{'_2p' if data_args.use_two_phase else ''}{f'_{data_args.query_prune}' if data_args.query_prune>0 else ''}.json",
+                f"avg_res{suffix}.json",
             ),
             "w",
         ) as f:
