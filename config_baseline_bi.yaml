@@ -2,12 +2,11 @@ logging_steps: 50
 # log_level_replica: info
 
 inf_free: false
-model_name_or_path: Alibaba-NLP/gte-en-mlm-base
-tokenizer_name: Alibaba-NLP/gte-en-mlm-base
-# vocab_resize: 1000
+model_name_or_path: Alibaba-NLP/gte-en-mlm-large
+tokenizer_name: Alibaba-NLP/gte-en-mlm-large
 
 max_seq_length: 256
-train_file: data/msmarco_ft
+train_file: data/msmarco_ft3
 data_type: kd
 loss_types: [kldiv]
 sample_num_one_query: 2
@@ -18,7 +17,7 @@ flops_q_lambda: 0.0004
 flops_q_T: 10000
 ranking_loss_weight: 1
 
-output_dir: output/baselines/gte-bi-15w
+output_dir: output/baselines/gte-bi-15w-large
 per_device_eval_batch_size: 50
 per_device_train_batch_size: 25
 

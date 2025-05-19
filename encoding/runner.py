@@ -13,34 +13,34 @@ def run_processes():
             "python",
             "upload_worker.py",
             "-f",
-            f"/opt/dlami/nvme/zeta/docs/{i}.bin",
+            f"/opt/dlami/nvme/zeta-256/docs/{i}.bin",
             "-t",
             "vector",
             "-m",
-            "2",
+            "5",
         ]
 
         process = subprocess.Popen(cmd)
         processes.append(process)
         print(
-            f"Started process for file /opt/dlami/nvme/zeta/docs/{i}.bin with PID {process.pid}"
+            f"Started process for file /opt/dlami/nvme/zeta-256/docs/{i}.bin with PID {process.pid}"
         )
 
         cmd = [
             "python",
             "upload_worker.py",
             "-f",
-            f"/opt/dlami/nvme/zeta/queries/{i}.bin",
+            f"/opt/dlami/nvme/zeta-256/queries/{i}.bin",
             "-t",
             "vector_q",
             "-m",
-            "2",
+            "5",
         ]
 
         process = subprocess.Popen(cmd)
         processes.append(process)
         print(
-            f"Started process for file /opt/dlami/nvme/zeta/queries/{i}.bin with PID {process.pid}"
+            f"Started process for file /opt/dlami/nvme/zeta-256/queries/{i}.bin with PID {process.pid}"
         )
 
     # 处理信号，确保清理子进程

@@ -3,12 +3,11 @@ import sys
 import logging
 import pickle
 import random
+import argparse  # 添加 argparse 模块
 
 from accelerate import Accelerator
 from transformers import AutoModel, AutoTokenizer
 from tqdm import tqdm
-
-from zeta import get_query_embeddings, get_document_embeddings
 from torch.utils.data import DataLoader, Dataset
 
 
@@ -69,16 +68,63 @@ class DDPDatasetWithRank(Dataset):
 
 query_to_id_path = "../data/query_to_id.bin"
 doc_to_id_path = "../data/doc_to_id.bin"
-query_save_path = "/opt/dlami/nvme/zeta/queries/"
-doc_save_path = "/opt/dlami/nvme/zeta/docs/"
 batch_size = 30
 last_q_id = -1
 last_d_id = -1
 
 
 def main():
-    tokenizer = AutoTokenizer.from_pretrained("zeta-alpha-ai/Zeta-Alpha-E5-Mistral")
-    model = AutoModel.from_pretrained("zeta-alpha-ai/Zeta-Alpha-E5-Mistral")
+    # 创建参数解析器
+    parser = argparse.ArgumentParser(description="Embedding generation script")
+    parser.add_argument(
+        "--method",
+        type=str,
+        default="inf",
+        choices=["bge_en_icl", "inf", "zeta"],
+        help="Embedding method to use (default: inf)",
+    )
+    parser.add_argument(
+        "--max_len",
+        type=int,
+        default=256,
+        help="Maximum length for tokens (default: 256)",
+    )
+
+    # 解析命令行参数
+    args = parser.parse_args()
+    method = args.method
+    max_len = args.max_len
+
+    # 根据方法选择不同的模块和路径
+    if method == "bge_en_icl":
+        from bge_en_icl import get_query_embeddings, get_document_embeddings
+
+        query_save_path = "/opt/dlami/nvme/bge-256/queries/"
+        doc_save_path = "/opt/dlami/nvme/bge-256/docs/"
+        model_id = "BAAI/bge-en-icl"
+    elif method == "inf":
+        from inf_retriever import get_query_embeddings, get_document_embeddings
+
+        query_save_path = "/opt/dlami/nvme/inf-256/queries/"
+        doc_save_path = "/opt/dlami/nvme/inf-256/docs/"
+        model_id = "infly/inf-retriever-v1"
+    elif method == "zeta":
+        from zeta import get_query_embeddings, get_document_embeddings
+
+        query_save_path = "/opt/dlami/nvme/zeta-256/queries/"
+        doc_save_path = "/opt/dlami/nvme/zeta-256/docs/"
+        model_id = "zeta-alpha-ai/Zeta-Alpha-E5-Mistral"
+
+    # 更新保存路径，包含 max_len
+    query_save_path = query_save_path.replace("256", str(max_len))
+    doc_save_path = doc_save_path.replace("256", str(max_len))
+
+    logger.info(f"Using method: {method}, max_len: {max_len}")
+    logger.info(f"Query save path: {query_save_path}")
+    logger.info(f"Document save path: {doc_save_path}")
+
+    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    model = AutoModel.from_pretrained(model_id)
 
     accelerator = Accelerator(mixed_precision="fp16")
     accelerator.prepare(model)
@@ -102,7 +148,9 @@ def main():
         os.path.join(query_save_path, f"{accelerator.local_process_index}.bin"), "wb"
     ) as f:
         for ids, texts in tqdm(dataloader):
-            embedding = get_query_embeddings(texts, model=model, tokenizer=tokenizer)
+            embedding = get_query_embeddings(
+                texts, model=model, tokenizer=tokenizer, query_max_len=max_len
+            )
             embedding = embedding.half().cpu().numpy()
             pickle.dump([ids.cpu().numpy().tolist(), embedding], f)
 
@@ -121,7 +169,9 @@ def main():
         os.path.join(doc_save_path, f"{accelerator.local_process_index}.bin"), "wb"
     ) as f:
         for ids, texts in tqdm(dataloader):
-            embedding = get_document_embeddings(texts, model=model, tokenizer=tokenizer)
+            embedding = get_document_embeddings(
+                texts, model=model, tokenizer=tokenizer, doc_max_len=max_len
+            )
             embedding = embedding.half().cpu().numpy()
             pickle.dump([ids.cpu().numpy().tolist(), embedding], f)
 
