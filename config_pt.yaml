@@ -18,12 +18,12 @@ flops_d_T: 10000
 ranking_loss_weight: 1
 kd_ensemble_teacher_kwargs:
   types: ["dense", "sparse", "remote", "remote"]
-  model_ids: ["Alibaba-NLP/gte-large-en-v1.5","opensearch-project/opensearch-neural-sparse-encoding-v1","4", "5"]
-  teacher_tokenizer_ids: ["Alibaba-NLP/gte-large-en-v1.5","opensearch-project/opensearch-neural-sparse-encoding-v1","4", "5"]
+  model_ids: ["Alibaba-NLP/gte-large-en-v1.5","opensearch-project/opensearch-neural-sparse-encoding-v1","3", "4"]
+  teacher_tokenizer_ids: ["Alibaba-NLP/gte-large-en-v1.5","opensearch-project/opensearch-neural-sparse-encoding-v1","3", "4"]
   score_scale: 30
 first_rank_thresh: 10
 
-output_dir: output/pt/with-45-llm-003
+output_dir: output/pt/with-34-llm-003
 per_device_eval_batch_size: 50
 per_device_train_batch_size: 15
 
