@@ -23,13 +23,13 @@ class LocalEmbeddingService:
         self.lock = threading.Lock()
         self.thread_pool = ThreadPoolExecutor(max_workers=max_workers)
 
-    def fetch_embeddings_from_server(self, text_ids: List[int]):
+    def fetch_embeddings_from_server(self, table_name: str, model_id: int, ids: List[int]):
         """Background task to fetch embeddings from local server"""
         try:
-            key = f"{','.join(map(str, text_ids))}"
+            key = f"{table_name}_{model_id}_{','.join(map(str, ids))}"
             response = requests.post(
                 f"{self.server_url}/embeddings",
-                json={"text_ids": text_ids}
+                json={"text_ids": ids, "model_id": model_id}
             )
             response.raise_for_status()
             
@@ -56,9 +56,9 @@ class LocalEmbeddingService:
                 if key in self.task_events:
                     self.task_events[key].set()
 
-    def register_task(self, text_ids: List[int]) -> Dict[str, Any]:
+    def register_task(self, table_name: str, model_id: int, ids: List[int]) -> Dict[str, Any]:
         """Register a task to fetch embeddings"""
-        key = f"{','.join(map(str, text_ids))}"
+        key = f"{table_name}_{model_id}_{','.join(map(str, ids))}"
 
         with self.lock:
             # Update or create task
@@ -71,24 +71,26 @@ class LocalEmbeddingService:
             else:
                 needs_submit = False
 
-        # Submit task outside the lock
-        if needs_submit:
-            self.thread_pool.submit(
-                self.fetch_embeddings_from_server,
-                text_ids,
-            )
+            # Submit task outside the lock
+            if needs_submit:
+                self.thread_pool.submit(
+                    self.fetch_embeddings_from_server,
+                    table_name,
+                    model_id,
+                    ids,
+                )
 
         return {"status": "success", "task_id": key}
 
-    def fetch_embedding(self, text_ids: List[int]) -> np.ndarray:
+    def fetch_embedding(self, table_name: str, model_id: int, ids: List[int]) -> np.ndarray:
         """Fetch embeddings, wait if task not completed"""
-        key = f"{','.join(map(str, text_ids))}"
+        key = f"{table_name}_{model_id}_{','.join(map(str, ids))}"
 
         # Check if task exists
         with self.lock:
             if key not in self.registered_tasks:
                 # Register a new task if it doesn't exist
-                self.register_task(text_ids)
+                self.register_task(table_name, model_id, ids)
 
             # If results are available, return directly
             if key in self.fetched_embeddings:
@@ -136,28 +138,3 @@ class LocalEmbeddingService:
     def shutdown(self):
         """Clean up resources when shutting down"""
         self.thread_pool.shutdown(wait=True)
-
-
-# Direct/synchronous client for simple use cases
-class SimpleLocalEmbeddingClient:
-    def __init__(self, server_url="http://localhost:8000"):
-        self.server_url = server_url
-
-    def get_embeddings(self, text_ids: List[int]) -> np.ndarray:
-        """Get embeddings for the given text IDs"""
-        response = requests.post(
-            f"{self.server_url}/embeddings",
-            json={"text_ids": text_ids}
-        )
-        response.raise_for_status()
-        
-        data = response.json()
-        raw_embeddings = data["embeddings"]
-        embeddings = []
-        for emb in raw_embeddings:
-            if emb is not None:
-                embeddings.append(np.array(emb, dtype=np.float16))
-            else:
-                embeddings.append(None)
-        
-        return np.array(embeddings)

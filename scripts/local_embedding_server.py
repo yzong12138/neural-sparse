@@ -174,4 +174,4 @@ if __name__ == "__main__":
         log_level=args.log_level
     )
 
-# python scripts/local_embedding_server.py --directories /path/to/embeddings1 /path/to/embeddings2 --model_ids 1 2
+# python scripts/local_embedding_server.py --directories /opt/dlami/nvme/bge-256 /opt/dlami/nvme/inf-256 --model_id 4 5
