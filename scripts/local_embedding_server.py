@@ -104,53 +104,35 @@ class EmbeddingStore:
         Get embeddings for the given text IDs from a specific model
         Returns a list of embeddings, with None for IDs that don't exist
         """
-        # Check if model exists
+        result = []
+        
+        # Check if model_id exists
         if model_id not in self.model_embeddings:
-            logger.warning(f"Model {model_id} not found in embedding store")
+            logger.warning(f"Model ID {model_id} not found in embedding store")
             return [None] * len(text_ids)
             
-        # Optimize lookup for better performance
-        result = []
         model_embeddings = self.model_embeddings[model_id]
         for id in text_ids:
             emb = model_embeddings.get(id)
             result.append(emb)
         return result
+        
+    def get_available_models(self) -> Dict[int, int]:
+        """
+        Returns a dictionary of available model IDs and their embedding dimensions
+        """
+        return {model_id: dim for model_id, dim in self.model_dimensions.items()}
 
 # Global store instance
 embedding_store = EmbeddingStore()
-
-# Middleware to track request metrics
-@app.middleware("http")
-async def track_request_metrics(request: Request, call_next):
-    start_time = time.time()
-    response = await call_next(request)
-    process_time = time.time() - start_time
-    
-    # Only track /embeddings endpoints for performance metrics
-    if request.url.path == "/embeddings":
-        embedding_store.request_count += 1
-        embedding_store.total_processing_time += process_time
-    
-    return response
 
 @app.post("/embeddings")
 async def get_embeddings(request: EmbeddingRequest):
     """
     Get embeddings for the given text IDs and model ID
     """
-    if not request.text_ids:
-        return {"embeddings": []}
-    
-    start_time = time.time()
     embeddings = embedding_store.get_embeddings(request.text_ids, request.model_id)
-    
-    # Convert to list for JSON serialization
     result = [emb.tolist() if emb is not None else None for emb in embeddings]
-    
-    elapsed = time.time() - start_time
-    if elapsed > 0.1:  # Log slow requests
-        logger.warning(f"Slow request: {len(request.text_ids)} embeddings for model {request.model_id} in {elapsed:.4f}s")
     
     return {"embeddings": result}
 
@@ -160,58 +142,27 @@ async def health_check():
     Health check endpoint
     """
     return {
-        "status": "healthy",
-        "embeddings_loaded": len(embedding_store.embeddings),
-        "embedding_dimension": embedding_store.embedding_dimension,
-        "uptime_seconds": (datetime.now() - embedding_store.start_time).total_seconds()
-    }
-
-@app.get("/metrics")
-async def get_metrics():
-    """
-    Get server performance metrics
-    """
-    uptime_seconds = (datetime.now() - embedding_store.start_time).total_seconds()
-    
-    return {
-        "request_count": embedding_store.request_count,
-        "uptime_seconds": uptime_seconds,
-        "requests_per_second": embedding_store.request_count / uptime_seconds if uptime_seconds > 0 else 0,
-        "avg_processing_time": embedding_store.total_processing_time / embedding_store.request_count 
-                              if embedding_store.request_count > 0 else 0,
-        "embeddings_count": len(embedding_store.embeddings),
-        "embedding_dimension": embedding_store.embedding_dimension
-    }
-
-@app.get("/")
-async def root():
-    """
-    Root endpoint with server information
-    """
-    return {
-        "name": "Local Embedding Server",
-        "version": "1.0.0",
-        "description": "Serves embeddings from local files",
-        "endpoints": [
-            {"path": "/embeddings", "method": "POST", "description": "Get embeddings for text IDs"},
-            {"path": "/health", "method": "GET", "description": "Server health check"},
-            {"path": "/metrics", "method": "GET", "description": "Server performance metrics"},
-        ]
+        "status": "healthy"
     }
 
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Start the local embedding server")
-    parser.add_argument("--directory", type=str, required=True, help="Directory containing embedding files")
-    parser.add_argument("--model_id", type=int, required=True, help="Model ID")
+    parser.add_argument("--directories", type=str, nargs="+", required=True, help="Directories containing embedding files")
+    parser.add_argument("--model_ids", type=int, nargs="+", required=True, help="Model IDs corresponding to directories")
     parser.add_argument("--port", type=int, default=8000, help="Port to run the server on")
     parser.add_argument("--workers", type=int, default=4, help="Number of uvicorn workers")
     parser.add_argument("--log-level", type=str, default="info", help="Log level")
     args = parser.parse_args()
 
+    # Validate that directories and model_ids have the same length
+    if len(args.directories) != len(args.model_ids):
+        raise ValueError("Number of directories must match number of model IDs")
+
     # Load embeddings before starting the server
-    logger.info(f"Loading embeddings from {args.directory} for model {args.model_id}")
-    embedding_store.load_embeddings(args.directory, args.model_id)
+    for directory, model_id in zip(args.directories, args.model_ids):
+        logger.info(f"Loading embeddings from {directory} for model {model_id}")
+        embedding_store.load_embeddings(directory, model_id)
     
     # Configure server options for optimal performance
     logger.info(f"Starting server on port {args.port} with {args.workers} workers")
@@ -222,3 +173,5 @@ if __name__ == "__main__":
         workers=args.workers,
         log_level=args.log_level
     )
+
+# python scripts/local_embedding_server.py --directories /path/to/embeddings1 /path/to/embeddings2 --model_ids 1 2
