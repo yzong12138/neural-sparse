@@ -151,7 +151,6 @@ if __name__ == "__main__":
     parser.add_argument("--directories", type=str, nargs="+", required=True, help="Directories containing embedding files")
     parser.add_argument("--model_ids", type=int, nargs="+", required=True, help="Model IDs corresponding to directories")
     parser.add_argument("--port", type=int, default=8000, help="Port to run the server on")
-    parser.add_argument("--workers", type=int, default=4, help="Number of uvicorn workers")
     parser.add_argument("--log-level", type=str, default="info", help="Log level")
     args = parser.parse_args()
 
@@ -165,13 +164,13 @@ if __name__ == "__main__":
         embedding_store.load_embeddings(directory, model_id)
     
     # Configure server options for optimal performance
-    logger.info(f"Starting server on port {args.port} with {args.workers} workers")
+    logger.info(f"Starting server on port {args.port}")
     uvicorn.run(
         app, 
         host="0.0.0.0", 
         port=args.port,
-        workers=args.workers,
         log_level=args.log_level
     )
 
 # python scripts/local_embedding_server.py --directories /opt/dlami/nvme/bge-256 /opt/dlami/nvme/inf-256 --model_id 4 5
+# python scripts/local_embedding_server.py --directories /opt/dlami/nvme/inf-256 --model_id 5

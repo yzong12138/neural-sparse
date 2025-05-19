@@ -44,7 +44,7 @@ def test_embedding_services(model_id: int, num_ids: int = 100, max_id: int = 100
     """测试两种嵌入服务返回的结果是否一致"""
     # 设置环境变量（EmbeddingService需要）
     if "AWS_REGION_NAME" not in os.environ:
-        os.environ["AWS_REGION_NAME"] = "us-west-2"  # 设置默认区域
+        os.environ["AWS_REGION_NAME"] = "ap-northeast-1"  # 设置默认区域
     
     # 初始化服务
     logger.info("初始化本地嵌入服务...")
@@ -59,12 +59,13 @@ def test_embedding_services(model_id: int, num_ids: int = 100, max_id: int = 100
     logger.info(f"随机ID样本: {random_ids[:5]}...")
     
     # 表名（可以是任意值，因为我们只关心两个服务是否返回相同的结果）
-    table_name = "test_table"
+    table_name = "vector"
     
     try:
         # 从本地服务获取嵌入
         logger.info(f"从本地服务获取model_id={model_id}的嵌入...")
         start_time = time.time()
+        model_id = 5
         local_service.register_task(table_name, model_id, random_ids)
         local_embeddings = local_service.fetch_embedding(table_name, model_id, random_ids)
         logger.info(f"本地服务耗时: {time.time() - start_time:.2f}秒")
@@ -72,6 +73,7 @@ def test_embedding_services(model_id: int, num_ids: int = 100, max_id: int = 100
         # 从DynamoDB服务获取嵌入
         logger.info(f"从DynamoDB服务获取model_id={model_id}的嵌入...")
         start_time = time.time()
+        model_id = 4
         dynamo_service.register_task(table_name, model_id, random_ids)
         dynamo_embeddings = dynamo_service.fetch_embedding(table_name, model_id, random_ids)
         logger.info(f"DynamoDB服务耗时: {time.time() - start_time:.2f}秒")
