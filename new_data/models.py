@@ -241,6 +241,32 @@ class T5Scorer:
         return scores.cpu().numpy()
 
 
+class BGEReranker:
+    def __init__(self, model_id, device, max_seq_length=256):
+        from FlagEmbedding import LightWeightFlagLLMReranker
+
+        self.model = LightWeightFlagLLMReranker(model_id, use_fp16=True, device="cpu")
+        self.device = device
+        self.max_seq_length = max_seq_length
+
+    def score(self, query, docs, **kwargs):
+        # Format input pairs as required by the reranker: [[query, doc1], [query, doc2], ...]
+        pairs = [[query, doc] for doc in docs]
+
+        # Compute scores using the reranker
+        scores = self.model.compute_score_single_gpu(
+            pairs,
+            cutoff_layers=[28],
+            compress_ratio=2,
+            compress_layers=[24, 40],
+            query_max_length=self.max_seq_length,
+            max_length=self.max_seq_length,
+            device=self.device,
+        )
+
+        return np.array(scores).reshape(-1)
+
+
 GET_SCORER = {
     "gte-bi": lambda device: DenseEmbeddingScorer(
         model_id="Alibaba-NLP/gte-large-en-v1.5", device=device
@@ -261,6 +287,10 @@ GET_SCORER = {
     ),
     "t5": lambda device: T5Scorer(
         model_id="castorini/monot5-3b-msmarco-10k",
+        device=device,
+    ),
+    "bge_gemma2_reranker": lambda device: BGEReranker(
+        model_id="BAAI/bge-reranker-v2.5-gemma2-lightweight",
         device=device,
     ),
 }
