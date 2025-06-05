@@ -57,6 +57,23 @@ class BEIRCorpusDataset(KeyValueDataset):
         super().__init__(combined_corpus)
 
 
+class BEIRHfDataset(Dataset):
+    def __init__(self, dataset: DatasetsDataset):
+        super().__init__()
+        # Filter out corpus entries where both title and text are empty
+        dataset = dataset.filter(
+            lambda sample: len(sample["title"]) + len(sample["text"]) > 3
+        )
+        self.dataset = dataset
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        data = self.dataset[idx]
+        return data["_id"], (data["title"] + " " + data["text"]).strip()
+
+
 class MiraclCorpusDataset(Dataset):
     def __init__(self, corpus, transform_lambda=None):
         """
