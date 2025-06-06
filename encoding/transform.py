@@ -4,6 +4,8 @@ import pickle
 
 query_to_id_path = "../data/query_to_id.bin"
 doc_to_id_path = "../data/doc_to_id.bin"
+source_data_dirs = ["../data/beir-kd-v2"]
+target_data_dir = "../data/pt-kd-ids-v2"
 
 with open(query_to_id_path, "rb") as f:
     query_to_id = pickle.load(f)
@@ -11,7 +13,7 @@ with open(query_to_id_path, "rb") as f:
 with open(doc_to_id_path, "rb") as f:
     doc_to_id = pickle.load(f)
 
-for data_dir in ["../data/pt-kd/", "../data/beir-kd/"]:
+for data_dir in source_data_dirs:
     data_names = os.listdir(data_dir)
     for data_name in data_names:
         dataset_path = os.path.join(data_dir, data_name)
@@ -23,7 +25,7 @@ for data_dir in ["../data/pt-kd/", "../data/beir-kd/"]:
         data["d_ids"] = d_ids
         ds2 = datasets.Dataset.from_dict(data)
 
-        write_path = os.path.join("../data/pt-kd-ids", data_name)
+        write_path = os.path.join(target_data_dir, data_name)
         ds2.save_to_disk(write_path)
 
         print(write_path)

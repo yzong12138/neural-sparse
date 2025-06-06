@@ -3,12 +3,11 @@ import sys
 import logging
 import pickle
 import random
+import argparse
 
 from accelerate import Accelerator
 from transformers import AutoModel, AutoTokenizer
 from tqdm import tqdm
-
-from zeta import get_query_embeddings, get_document_embeddings
 from torch.utils.data import DataLoader, Dataset
 
 
@@ -26,10 +25,10 @@ logger = get_logger_console(__name__)
 
 
 class TextToIdDataset(Dataset):
-    def __init__(self, text_to_id, last_id=-1):
+    def __init__(self, text_to_id, from_id=-1):
         text_id_pairs = text_to_id.items()
-        self.keys = sorted([_id for text, _id in text_id_pairs if _id >= last_id])
-        self.data = {_id: text for text, _id in text_id_pairs if _id >= last_id}
+        self.keys = sorted([_id for text, _id in text_id_pairs if _id >= from_id])
+        self.data = {_id: text for text, _id in text_id_pairs if _id >= from_id}
 
     def __len__(self):
         return len(self.data)
@@ -67,36 +66,85 @@ class DDPDatasetWithRank(Dataset):
         return self.inner_dataset[self.idxs[idx]]
 
 
-query_to_id_path = "../data/query_to_id.bin"
-doc_to_id_path = "../data/doc_to_id.bin"
-query_save_path = "/opt/dlami/nvme/zeta/queries/"
-doc_save_path = "/opt/dlami/nvme/zeta/docs/"
-batch_size = 30
-last_q_id = -1
-last_d_id = -1
+def get_model_config(model_type):
+    """Return model-specific configuration based on model_type"""
+    config = {
+        "bge": {
+            "model_id": "BAAI/bge-en-icl",
+            "query_save_path": "/opt/dlami/nvme/bge-256/queries/",
+            "doc_save_path": "/opt/dlami/nvme/bge-256/docs/",
+            "module": "bge_en_icl"
+        },
+        "inf": {
+            "model_id": "infly/inf-retriever-v1",
+            "query_save_path": "/opt/dlami/nvme/inf-256/queries/",
+            "doc_save_path": "/opt/dlami/nvme/inf-256/docs/",
+            "module": "inf_retriever"
+        },
+        "zeta": {
+            "model_id": "zeta-alpha-ai/Zeta-Alpha-E5-Mistral",
+            "query_save_path": "/opt/dlami/nvme/zeta/queries/",
+            "doc_save_path": "/opt/dlami/nvme/zeta/docs/",
+            "module": "zeta"
+        }
+    }
+    return config[model_type]
+
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='Generate embeddings using specified model')
+    parser.add_argument('--model_type', type=str, choices=['bge', 'inf', 'zeta'], 
+                        required=True, help='Model type to use (bge, inf, or zeta)')
+    parser.add_argument('--batch_size', type=int, default=30, 
+                        help='Batch size for processing')
+    parser.add_argument('--from_q_id', type=int, default=5604177, 
+                        help='Starting query ID')
+    parser.add_argument('--from_d_id', type=int, default=22527349, 
+                        help='Starting document ID')
+    parser.add_argument('--query_to_id_path', type=str, default="../data/query_to_id.bin", 
+                        help='Path to query_to_id binary file')
+    parser.add_argument('--doc_to_id_path', type=str, default="../data/doc_to_id.bin",
+                        help='Path to doc_to_id binary file')
+    
+    return parser.parse_args()
 
 
 def main():
-    tokenizer = AutoTokenizer.from_pretrained("zeta-alpha-ai/Zeta-Alpha-E5-Mistral")
-    model = AutoModel.from_pretrained("zeta-alpha-ai/Zeta-Alpha-E5-Mistral")
+    args = parse_arguments()
+    
+    model_config = get_model_config(args.model_type)
+    model_id = model_config["model_id"]
+    query_save_path = model_config["query_save_path"]
+    doc_save_path = model_config["doc_save_path"]
+    
+    # Dynamically import the appropriate module
+    module_name = model_config["module"]
+    module = __import__(module_name, fromlist=['get_query_embeddings', 'get_document_embeddings'])
+    get_query_embeddings = module.get_query_embeddings
+    get_document_embeddings = module.get_document_embeddings
+    
+    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    model = AutoModel.from_pretrained(model_id)
 
     accelerator = Accelerator(mixed_precision="fp16")
     accelerator.prepare(model)
 
+    # Test the model with dummy input
     embedding = get_query_embeddings(
-        ["hi " * 512] * batch_size, model=model, tokenizer=tokenizer
+        ["hi " * 512] * args.batch_size, model=model, tokenizer=tokenizer
     )
 
-    with open(query_to_id_path, "rb") as f:
+    # Process queries
+    with open(args.query_to_id_path, "rb") as f:
         query_to_id = pickle.load(f)
 
     ddp_dataset = DDPDatasetWithRank(
-        TextToIdDataset(query_to_id, last_q_id),
+        TextToIdDataset(query_to_id, args.from_q_id),
         accelerator.local_process_index,
         accelerator.num_processes,
     )
 
-    dataloader = DataLoader(ddp_dataset, batch_size=batch_size)
+    dataloader = DataLoader(ddp_dataset, batch_size=args.batch_size)
     os.makedirs(query_save_path, exist_ok=True)
     with open(
         os.path.join(query_save_path, f"{accelerator.local_process_index}.bin"), "wb"
@@ -106,16 +154,17 @@ def main():
             embedding = embedding.half().cpu().numpy()
             pickle.dump([ids.cpu().numpy().tolist(), embedding], f)
 
-    with open(doc_to_id_path, "rb") as f:
+    # Process documents
+    with open(args.doc_to_id_path, "rb") as f:
         doc_to_id = pickle.load(f)
 
     ddp_dataset = DDPDatasetWithRank(
-        TextToIdDataset(doc_to_id, last_d_id),
+        TextToIdDataset(doc_to_id, args.from_d_id),
         accelerator.local_process_index,
         accelerator.num_processes,
     )
 
-    dataloader = DataLoader(ddp_dataset, batch_size=batch_size)
+    dataloader = DataLoader(ddp_dataset, batch_size=args.batch_size)
     os.makedirs(doc_save_path, exist_ok=True)
     with open(
         os.path.join(doc_save_path, f"{accelerator.local_process_index}.bin"), "wb"

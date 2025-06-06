@@ -73,9 +73,9 @@ class DDPDatasetWithRank(Dataset):
 beir_data_path = "data/beir"
 dataset = "msmarco"
 split = "train"
-model_path = "wyw"
-batch_size = 50
-save_path = "encoding/msmarco-wyw"
+model_path = "models/SDD-001"
+batch_size = 100
+save_path = "encoding/sdd-001"
 max_length = 256
 use_l0 = False
 
@@ -108,7 +108,7 @@ def main():
         for ids, texts in tqdm(dataloader):
             output = sparse_encoder.encode(texts)
             for _id, sv in zip(ids, output):
-                wf.write(json.dumps({"_id": _id, "sparse_embedding": sv}))
+                wf.write(json.dumps({"id": _id, "sparse_embedding": sv}))
                 wf.write("\n")
 
     accelerator.wait_for_everyone()
