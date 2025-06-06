@@ -2,8 +2,8 @@ logging_steps: 50
 # log_level_replica: info
 
 inf_free: true
-model_name_or_path: output/pt/with-345-llm-001/checkpoint-200000
-tokenizer_name: output/pt/with-345-llm-001/checkpoint-200000
+model_name_or_path: output/pt/with-34-marco-full/checkpoint-300000
+tokenizer_name: output/pt/with-34-marco-full/checkpoint-300000
 idf_path: idf.json
 use_l0: true
 
@@ -16,9 +16,9 @@ use_in_batch_negatives: false
 flops_d_lambda: 0.08
 flops_d_T: 10000
 ranking_loss_weight: 1
-flops_threshold: 150
+flops_threshold: 100
 
-output_dir: output/baselines-pt/with-345-llm-001/ft3-150
+output_dir: output/pt/with-34-marco-full/ft3-full
 per_device_eval_batch_size: 50
 per_device_train_batch_size: 30
 
