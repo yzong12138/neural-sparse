@@ -1,7 +1,7 @@
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 
-source_dir = "output/baselines-pt/with-01-llm/ft3-0.08-l0-200/checkpoint-50000"
-target_dir = "1-click"
+source_dir = "output/baselines-pt/with-01-llm/ft3-0.08-l0-150/checkpoint-50000"
+target_dir = "one_click"
 
 model = AutoModelForMaskedLM.from_pretrained(source_dir, trust_remote_code=True)
 tokenizer = AutoTokenizer.from_pretrained(source_dir, trust_remote_code=True)

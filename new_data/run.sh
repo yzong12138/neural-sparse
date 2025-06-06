@@ -1,0 +1,10 @@
+# torchrun --nproc_per_node=8 scorer.py --identifier gte-bi
+# torchrun --nproc_per_node=8 scorer.py --identifier sparse-v1
+# torchrun --nproc_per_node=8 scorer.py --identifier llm-3
+# torchrun --nproc_per_node=8 scorer.py --identifier llm-4
+# torchrun --nproc_per_node=8 scorer.py --identifier minilm
+torchrun --nproc_per_node=8 scorer.py --identifier t5 --all_datasets nfcorpus,fiqa
+torchrun --nproc_per_node=8 scorer.py --identifier llm-0
+torchrun --nproc_per_node=8 scorer.py --identifier llm-1
+torchrun --nproc_per_node=8 scorer.py --identifier llm-2
+torchrun --nproc_per_node=8 scorer.py --identifier llm-5

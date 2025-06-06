@@ -22,6 +22,7 @@ async def search(
     delete: bool = False,
     use_two_phase: bool = False,
     query_prune: float = 0,
+    return_text: bool = False,
 ):
     if use_two_phase:
         client = get_os_client()
@@ -62,14 +63,17 @@ async def search(
             get_query_lambda=lambda query: {
                 "size": result_size,
                 "query": sparse_embedding_to_query(query, query_prune=query_prune),
-                "_source": ["id"],
+                "_source": ["id", "text"],
             },
             interval=0.001,
             use_two_phase=use_two_phase,
         )
 
         for i, (_id, res) in enumerate(zip(ids, search_results)):
-            run_res[_id] = {hit["_source"]["id"]: hit["_score"] for hit in res}
+            if return_text:
+                run_res[_id] = [hit["_source"]["text"] for hit in res]
+            else:
+                run_res[_id] = {hit["_source"]["id"]: hit["_score"] for hit in res}
 
     for query_id, doc_dict in run_res.items():
         if query_id in doc_dict:
