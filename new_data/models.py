@@ -58,22 +58,22 @@ class RemoteEmbeddingScorer:
         self.model = model
         self.embedding_service = EmbeddingService()
 
-    def score(self, q_id, d_ids, **kwargs):
+    def score(self, dynamo_q_id, dynamo_d_ids, **kwargs):
         self.embedding_service.register_task(
-            table_name="vector_q", model_id=self.model, ids=[q_id]
+            table_name="vector_q", model_id=self.model, ids=[dynamo_q_id]
         )
         self.embedding_service.register_task(
-            table_name="vector", model_id=self.model, ids=d_ids
+            table_name="vector", model_id=self.model, ids=dynamo_d_ids
         )
         q_emb = self.embedding_service.fetch_embedding(
             table_name="vector_q",
             model_id=self.model,
-            ids=[q_id],
+            ids=[dynamo_q_id],
         )[0]
         d_embs = self.embedding_service.fetch_embedding(
             table_name="vector",
             model_id=self.model,
-            ids=d_ids,
+            ids=dynamo_d_ids,
         )
         scores = np.matmul(q_emb, d_embs.T)
         return scores
@@ -281,6 +281,7 @@ GET_SCORER = {
     "llm-3": lambda device: RemoteEmbeddingScorer("3"),
     "llm-4": lambda device: RemoteEmbeddingScorer("4"),
     "llm-5": lambda device: RemoteEmbeddingScorer("5"),
+    "llm-6": lambda device: RemoteEmbeddingScorer("6"),
     "minilm": lambda device: MinilmScorer(
         model_id="cross-encoder/ms-marco-MiniLM-L12-v2",
         device=device,

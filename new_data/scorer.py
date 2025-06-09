@@ -39,7 +39,7 @@ def main():
     parser.add_argument(
         "--dataset_path",
         type=str,
-        default="to_scores",
+        default="./",
         help="Path to the datasets directory (default: to_scores)",
     )
     parser.add_argument(
