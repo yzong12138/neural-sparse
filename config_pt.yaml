@@ -8,7 +8,7 @@ idf_path: idf.json
 use_l0: false
 
 max_seq_length: 256
-train_file_dir: [data/pt-kd-ids, new_data/pt-marco-full]
+train_file_dir: [data/pt-kd-ids-v2, data/pt-marco-half]
 data_type: kd-ids
 loss_types: [kldiv]
 sample_num_one_query: 3
@@ -23,7 +23,7 @@ kd_ensemble_teacher_kwargs:
   score_scale: 30
 first_rank_thresh: 10
 
-output_dir: output/pt/with-34-marco-full
+output_dir: output/pt/with-34-pt-v2-marco
 per_device_eval_batch_size: 50
 per_device_train_batch_size: 15
 
