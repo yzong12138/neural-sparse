@@ -2,8 +2,6 @@ import os
 import numpy as np
 import torch
 
-from sentence_transformers import SentenceTransformer
-
 import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -13,6 +11,8 @@ from scripts.model.sparse_encoders import SparseModel
 
 class DenseEmbeddingScorer:
     def __init__(self, model_id, device, max_seq_length=256):
+        from sentence_transformers import SentenceTransformer
+        
         self.model = SentenceTransformer(
             model_id,
             trust_remote_code=True,
