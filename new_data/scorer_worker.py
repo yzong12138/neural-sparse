@@ -9,6 +9,7 @@ from models import GET_SCORER
 
 try:
     import torch
+
     HAS_TORCH = True
 except ImportError:
     HAS_TORCH = False
@@ -104,33 +105,35 @@ def parse_arguments():
 
 def main():
     args = parse_arguments()
-    
+
     dataset_path = args.dataset_path
     dataset_name = args.dataset_name
     output_dir = args.output_dir
     identifier = args.identifier
     total_processes = args.total_processes
     process_rank = args.process_rank
-    
-    logger.info(f"Starting worker process {process_rank}/{total_processes} for dataset {dataset_name}")
-    
+
+    logger.info(
+        f"Starting worker process {process_rank}/{total_processes} for dataset {dataset_name}"
+    )
+
     # Initialize the scorer - use specific GPU based on process rank
     if HAS_TORCH and torch.cuda.is_available():
         gpu_id = process_rank % torch.cuda.device_count()
     else:
         gpu_id = process_rank
-    
+
     scorer = GET_SCORER[identifier](f"cuda:{gpu_id}")
-    
+
     # Load and select dataset portion for this process
     dataset = datasets.load_from_disk(os.path.join(dataset_path, dataset_name))
     dataset = select_dataset(dataset, total_processes, process_rank)
-    
+
     logger.info(f"Process {process_rank} processing {len(dataset)} samples")
-    
+
     # Process the data
     pairs = get_pairs(dataset)
-    
+
     if identifier.startswith("bge"):
         all_scores = scorer.score_pairs(pairs)
         all_scores = all_scores.reshape(-1, 100)
@@ -141,9 +144,11 @@ def main():
             scores = scorer.score(**dataset[i])
             all_scores.append(scores)
         all_scores = np.array(all_scores)
-    
-    logger.info(f"Process {process_rank} computed scores with shape: {all_scores.shape}")
-    
+
+    logger.info(
+        f"Process {process_rank} computed scores with shape: {all_scores.shape}"
+    )
+
     # Save scores for this process
     output_file = os.path.join(
         output_dir, dataset_name, identifier + f"_{process_rank}.npy"
@@ -153,4 +158,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main() 
+    main()

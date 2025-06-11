@@ -22,7 +22,9 @@ logger = get_logger_console(__name__)
 
 
 def parse_arguments():
-    parser = argparse.ArgumentParser(description="Score datasets using specified model with multiple processes")
+    parser = argparse.ArgumentParser(
+        description="Score datasets using specified model with multiple processes"
+    )
     parser.add_argument(
         "--dataset_path",
         type=str,
@@ -58,37 +60,47 @@ def parse_arguments():
 
 def run_processes(args):
     processes = []
-    
+
     for dataset_name in args.all_datasets.split(","):
         # Create output directory
         os.makedirs(os.path.join(args.output_dir, dataset_name), exist_ok=True)
-        
+
         # Start worker processes for this dataset
         dataset_processes = []
-        
+
         for rank in range(args.num_processes):
             cmd = [
                 "python",
                 "scorer_worker.py",
-                "--dataset_path", args.dataset_path,
-                "--dataset_name", dataset_name,
-                "--output_dir", args.output_dir,
-                "--identifier", args.identifier,
-                "--total_processes", str(args.num_processes),
-                "--process_rank", str(rank),
+                "--dataset_path",
+                args.dataset_path,
+                "--dataset_name",
+                dataset_name,
+                "--output_dir",
+                args.output_dir,
+                "--identifier",
+                args.identifier,
+                "--total_processes",
+                str(args.num_processes),
+                "--process_rank",
+                str(rank),
             ]
-            
+
             process = subprocess.Popen(cmd)
             dataset_processes.append(process)
-            logger.info(f"Started worker process {rank} for dataset {dataset_name} with PID {process.pid}")
-        
+            logger.info(
+                f"Started worker process {rank} for dataset {dataset_name} with PID {process.pid}"
+            )
+
         # Wait for all processes of this dataset to complete
         if not wait_for_processes(dataset_processes, dataset_name):
             return False
-            
+
         # Combine scores for this dataset
-        combine_scores(args.output_dir, dataset_name, args.identifier, args.num_processes)
-    
+        combine_scores(
+            args.output_dir, dataset_name, args.identifier, args.num_processes
+        )
+
     return True
 
 
@@ -103,26 +115,30 @@ def wait_for_processes(processes, dataset_name):
                 # Process has ended, check return code
                 return_code = proc.poll()
                 if return_code != 0:
-                    logger.error(f"Process {i} for dataset {dataset_name} failed with return code {return_code}")
+                    logger.error(
+                        f"Process {i} for dataset {dataset_name} failed with return code {return_code}"
+                    )
                     # Terminate all other processes
                     cleanup_processes(processes)
                     return False
-        
+
         if all_done:
-            logger.info(f"All processes for dataset {dataset_name} completed successfully")
+            logger.info(
+                f"All processes for dataset {dataset_name} completed successfully"
+            )
             break
-        
+
         time.sleep(1)
-    
+
     return True
 
 
 def combine_scores(output_dir, dataset_name, identifier, num_processes):
     """Combine scores from all processes"""
     logger.info(f"Combining scores for dataset {dataset_name}")
-    
+
     combined_scores = []
-    
+
     # Read scores from each process in order
     for proc_idx in range(num_processes):
         proc_file = os.path.join(
@@ -136,12 +152,12 @@ def combine_scores(output_dir, dataset_name, identifier, num_processes):
             logger.info(f"Loaded and removed {proc_file}")
         else:
             logger.warning(f"File {proc_file} not found")
-    
+
     if combined_scores:
         # Concatenate all scores
         combined_scores = np.concatenate(combined_scores, axis=0)
         logger.info(f"Combined scores shape: {combined_scores.shape}")
-        
+
         # Save the combined scores
         final_output_file = os.path.join(
             output_dir, dataset_name, identifier + f"_scores.npy"
@@ -175,17 +191,17 @@ def signal_handler(signum, frame, processes):
 
 def main():
     args = parse_arguments()
-    
+
     logger.info(f"Starting scorer with {args.num_processes} processes")
     logger.info(f"Datasets: {args.all_datasets}")
     logger.info(f"Identifier: {args.identifier}")
-    
+
     processes = []
-    
+
     # Register signal handlers
     signal.signal(signal.SIGINT, lambda s, f: signal_handler(s, f, processes))
     signal.signal(signal.SIGTERM, lambda s, f: signal_handler(s, f, processes))
-    
+
     try:
         success = run_processes(args)
         if success:
@@ -202,4 +218,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main() 
+    main()

@@ -41,6 +41,7 @@ class DataTrainingArguments:
     do_search: bool = field(default=True)
     query_prune: float = field(default=0)
     flops_threshold: int = field(default=None)
+    shuffle: bool = field(default=False)
 
     def __post_init__(self):
         return
