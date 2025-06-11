@@ -12,7 +12,7 @@ from scripts.model.sparse_encoders import SparseModel
 class DenseEmbeddingScorer:
     def __init__(self, model_id, device, max_seq_length=256):
         from sentence_transformers import SentenceTransformer
-        
+
         self.model = SentenceTransformer(
             model_id,
             trust_remote_code=True,
@@ -267,6 +267,43 @@ class BGEReranker:
         return np.array(scores).reshape(-1)
 
 
+class BGELWReranker:
+    def __init__(self, device, max_seq_length=256):
+        from FlagEmbedding import LayerWiseFlagLLMReranker
+
+        self.model = LayerWiseFlagLLMReranker(
+            "BAAI/bge-reranker-v2-minicpm-layerwise", use_fp16=True, device="cpu"
+        )
+        self.device = device
+        self.max_seq_length = max_seq_length
+
+    def score(self, query, docs, **kwargs):
+        # Format input pairs as required by the reranker: [[query, doc1], [query, doc2], ...]
+        pairs = [[query, doc] for doc in docs]
+
+        # Compute scores using the reranker
+        scores = self.model.compute_score_single_gpu(
+            pairs,
+            cutoff_layers=[28],
+            query_max_length=self.max_seq_length,
+            max_length=self.max_seq_length,
+            device=self.device,
+        )
+
+        return np.array(scores).reshape(-1)
+
+    def score_pairs(self, pairs):
+        scores = self.model.compute_score_single_gpu(
+            pairs,
+            cutoff_layers=[28],
+            query_max_length=self.max_seq_length,
+            max_length=self.max_seq_length,
+            device=self.device,
+        )
+
+        return np.array(scores).reshape(-1)
+
+
 GET_SCORER = {
     "gte-bi": lambda device: DenseEmbeddingScorer(
         model_id="Alibaba-NLP/gte-large-en-v1.5", device=device
@@ -292,6 +329,9 @@ GET_SCORER = {
     ),
     "bge_gemma2_reranker": lambda device: BGEReranker(
         model_id="BAAI/bge-reranker-v2.5-gemma2-lightweight",
+        device=device,
+    ),
+    "bge_lw_reranker": lambda device: BGELWReranker(
         device=device,
     ),
 }

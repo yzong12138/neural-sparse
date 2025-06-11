@@ -1,9 +1,10 @@
 set -e
 
-torchrun --nproc_per_node=8 scorer.py --identifier minilm --all_datasets msmarco_raw
-torchrun --nproc_per_node=8 scorer.py --identifier gte-bi --all_datasets msmarco_raw
-torchrun --nproc_per_node=8 scorer.py --identifier sparse-v1 --all_datasets msmarco_raw
+# torchrun --nproc_per_node=8 scorer.py --identifier bge_lw_reranker --all_datasets msmarco_ft3 --dataset_path ../data/
 
-# torchrun --nproc_per_node=8 scorer.py --identifier llm-3 --all_datasets msmarco_raw
-# torchrun --nproc_per_node=8 scorer.py --identifier llm-4 --all_datasets msmarco_raw
-# torchrun --nproc_per_node=8 scorer.py --identifier llm-5 --all_datasets msmarco_raw
+
+python scorer_runner.py \
+    --dataset_path ../data/ \
+    --all_datasets "msmarco_ft3" \
+    --identifier bge_lw_reranker \
+    --num_processes 8

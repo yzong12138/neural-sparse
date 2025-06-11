@@ -29,6 +29,29 @@ def select_dataset(dataset, total_processes, process_index):
     return dataset.select(range(start_idx, end_idx))
 
 
+def get_pairs(dataset):
+    def make_pairs(batch):
+        out_q, out_d = [], []
+        for q, docs in zip(batch["query"], batch["docs"]):
+            n = len(docs)
+            # 重复 query n 次，然后 flatten docs
+            out_q.extend([q] * n)
+            out_d.extend(docs)
+        return {"query": out_q, "doc": out_d}
+
+    paired_ds = dataset.map(
+        make_pairs,
+        num_proc=3,
+        batched=True,  # 批量处理
+        remove_columns=dataset.column_names,  # 删除旧列
+    )
+
+    queries = paired_ds["query"]
+    docs = paired_ds["doc"]
+    pairs = list(zip(queries, docs))
+    return pairs
+
+
 logger = get_logger_console(__name__)
 
 
@@ -83,13 +106,18 @@ def main():
             os.makedirs(os.path.join(output_dir, dataset_name), exist_ok=True)
         accelerator.wait_for_everyone()
 
-        all_scores = []
-        for i in tqdm(range(len(dataset))):
-            # Use the scorer
-            scores = scorer.score(**dataset[i])
-            all_scores.append(scores)
-
-        all_scores = np.array(all_scores)
+        pairs = get_pairs(dataset)
+        if identifier.startswith("bge"):
+            all_scores = scorer.score_pairs(pairs)
+            all_scores = all_scores.reshape(-1, 100)
+        else:
+            all_scores = []
+            for i in tqdm(range(len(dataset))):
+                # Use the scorer
+                scores = scorer.score(**dataset[i])
+                all_scores.append(scores)
+            all_scores = np.array(all_scores)
+            
         logger.info(all_scores.size)
         np.save(
             os.path.join(
