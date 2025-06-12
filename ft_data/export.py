@@ -24,12 +24,16 @@ corpus, queries, qrels = GenericDataLoader(data_folder=local_data_path).load(
 q_ids = [res["q_id"] for res in search_res]
 d_ids = [res["d_ids"] for res in search_res]
 
-score_sparse = np.load("sparse_scores.bin.npy")
-score_dense = np.load("gte_scores.bin.npy")
+# score_sparse = np.load("sparse_scores.bin.npy")
+# score_dense = np.load("gte_scores.bin.npy")
 score_t5 = np.load("t5_scores.bin.npy")
 score_minilm = np.load("minilm_scores.bin.npy")
 score_bge_en_icl = np.load("bge_256_scores.bin.npy")
-score_gte_bi_15w = np.load("gte-bi-15w-scores.bin.npy")
+# score_gte_bi_15w = np.load("gte-bi-15w-scores.bin.npy")
+
+score_inf = np.load("inf_scores.bin.npy")
+score_bge_gemma2 = np.load("bge_gemma2_reranker_scores.npy")
+score_qwen = np.load("qwen3_scores.bin.npy")
 
 
 def transform_str(s):
@@ -73,10 +77,19 @@ def export_to_dataset(scores):
     return datasets.Dataset.from_list(all_data)
 
 
-score = combine(score_sparse,score_dense,score_t5,score_minilm,score_bge_en_icl, weights=[1,1,1,1,2])
+# score = combine(score_sparse,score_dense,score_t5,score_minilm,score_bge_en_icl, weights=[1,1,1,1,2])
 # score = min_max_norm(score_bge_en_icl)
+score = combine(
+    score_qwen,
+    score_bge_gemma2,
+    score_inf,
+    score_t5,
+    score_minilm,
+    score_bge_en_icl,
+    weights=[1, 1, 1, 1, 1, 2],
+)
 ds = export_to_dataset(score)
 
 print(ds[0])
 
-ds.save_to_disk("../data/msmarco_ft4")
+ds.save_to_disk("../data/msmarco_ft_llm_reranker")

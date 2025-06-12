@@ -73,56 +73,76 @@ def get_model_config(model_type):
             "model_id": "BAAI/bge-en-icl",
             "query_save_path": "/opt/dlami/nvme/bge-256/queries/",
             "doc_save_path": "/opt/dlami/nvme/bge-256/docs/",
-            "module": "bge_en_icl"
+            "module": "bge_en_icl",
         },
         "inf": {
             "model_id": "infly/inf-retriever-v1",
             "query_save_path": "/opt/dlami/nvme/inf-256/queries/",
             "doc_save_path": "/opt/dlami/nvme/inf-256/docs/",
-            "module": "inf_retriever"
+            "module": "inf_retriever",
         },
         "zeta": {
             "model_id": "zeta-alpha-ai/Zeta-Alpha-E5-Mistral",
             "query_save_path": "/opt/dlami/nvme/zeta/queries/",
             "doc_save_path": "/opt/dlami/nvme/zeta/docs/",
-            "module": "zeta"
-        }
+            "module": "zeta",
+        },
     }
     return config[model_type]
 
 
 def parse_arguments():
-    parser = argparse.ArgumentParser(description='Generate embeddings using specified model')
-    parser.add_argument('--model_type', type=str, choices=['bge', 'inf', 'zeta'], 
-                        required=True, help='Model type to use (bge, inf, or zeta)')
-    parser.add_argument('--batch_size', type=int, default=30, 
-                        help='Batch size for processing')
-    parser.add_argument('--from_q_id', type=int, default=5604177, 
-                        help='Starting query ID')
-    parser.add_argument('--from_d_id', type=int, default=22527349, 
-                        help='Starting document ID')
-    parser.add_argument('--query_to_id_path', type=str, default="../data/query_to_id.bin", 
-                        help='Path to query_to_id binary file')
-    parser.add_argument('--doc_to_id_path', type=str, default="../data/doc_to_id.bin",
-                        help='Path to doc_to_id binary file')
-    
+    parser = argparse.ArgumentParser(
+        description="Generate embeddings using specified model"
+    )
+    parser.add_argument(
+        "--model_type",
+        type=str,
+        choices=["bge", "inf", "zeta"],
+        required=True,
+        help="Model type to use (bge, inf, or zeta)",
+    )
+    parser.add_argument(
+        "--batch_size", type=int, default=30, help="Batch size for processing"
+    )
+    parser.add_argument(
+        "--from_q_id", type=int, default=5604177, help="Starting query ID"
+    )
+    parser.add_argument(
+        "--from_d_id", type=int, default=22527349, help="Starting document ID"
+    )
+    parser.add_argument(
+        "--query_to_id_path",
+        type=str,
+        default="../data/query_to_id.bin",
+        help="Path to query_to_id binary file",
+    )
+    parser.add_argument(
+        "--doc_to_id_path",
+        type=str,
+        default="../data/doc_to_id.bin",
+        help="Path to doc_to_id binary file",
+    )
+
     return parser.parse_args()
 
 
 def main():
     args = parse_arguments()
-    
+
     model_config = get_model_config(args.model_type)
     model_id = model_config["model_id"]
     query_save_path = model_config["query_save_path"]
     doc_save_path = model_config["doc_save_path"]
-    
+
     # Dynamically import the appropriate module
     module_name = model_config["module"]
-    module = __import__(module_name, fromlist=['get_query_embeddings', 'get_document_embeddings'])
+    module = __import__(
+        module_name, fromlist=["get_query_embeddings", "get_document_embeddings"]
+    )
     get_query_embeddings = module.get_query_embeddings
     get_document_embeddings = module.get_document_embeddings
-    
+
     tokenizer = AutoTokenizer.from_pretrained(model_id)
     model = AutoModel.from_pretrained(model_id)
 

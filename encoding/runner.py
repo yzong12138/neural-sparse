@@ -7,17 +7,40 @@ import argparse
 
 
 def parse_arguments():
-    parser = argparse.ArgumentParser(description='Run multiple upload worker processes')
-    parser.add_argument('-m', '--model', type=str, default='2',
-                        help='Model parameter to pass to upload_worker.py (default: 2)')
-    parser.add_argument('-d', '--directory', type=str, default='/opt/dlami/nvme/zeta',
-                        help='Base directory containing docs/ and queries/ subdirectories')
-    parser.add_argument('-c', '--count', type=int, default=8,
-                        help='Number of worker processes to run for each type (default: 8)')
-    parser.add_argument('--docs-subdir', type=str, default='docs',
-                        help='Subdirectory name for document files (default: docs)')
-    parser.add_argument('--queries-subdir', type=str, default='queries',
-                        help='Subdirectory name for query files (default: queries)')
+    parser = argparse.ArgumentParser(description="Run multiple upload worker processes")
+    parser.add_argument(
+        "-m",
+        "--model",
+        type=str,
+        default="2",
+        help="Model parameter to pass to upload_worker.py (default: 2)",
+    )
+    parser.add_argument(
+        "-d",
+        "--directory",
+        type=str,
+        default="/opt/dlami/nvme/zeta",
+        help="Base directory containing docs/ and queries/ subdirectories",
+    )
+    parser.add_argument(
+        "-c",
+        "--count",
+        type=int,
+        default=8,
+        help="Number of worker processes to run for each type (default: 8)",
+    )
+    parser.add_argument(
+        "--docs-subdir",
+        type=str,
+        default="docs",
+        help="Subdirectory name for document files (default: docs)",
+    )
+    parser.add_argument(
+        "--queries-subdir",
+        type=str,
+        default="queries",
+        help="Subdirectory name for query files (default: queries)",
+    )
     return parser.parse_args()
 
 
@@ -30,9 +53,12 @@ def run_processes(args):
         cmd = [
             "python",
             "upload_worker.py",
-            "-f", docs_file,
-            "-t", "vector",
-            "-m", args.model,
+            "-f",
+            docs_file,
+            "-t",
+            "vector",
+            "-m",
+            args.model,
         ]
 
         process = subprocess.Popen(cmd)
@@ -44,9 +70,12 @@ def run_processes(args):
         cmd = [
             "python",
             "upload_worker.py",
-            "-f", queries_file,
-            "-t", "vector_q",
-            "-m", args.model,
+            "-f",
+            queries_file,
+            "-t",
+            "vector_q",
+            "-m",
+            args.model,
         ]
 
         process = subprocess.Popen(cmd)
@@ -60,7 +89,7 @@ def run_processes(args):
         sys.exit(0)
 
     # Register signal handlers
-    signal.signal(signal.SIGINT, signal_handler)   # Ctrl+C
+    signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C
     signal.signal(signal.SIGTERM, signal_handler)  # Termination signal
 
     try:
