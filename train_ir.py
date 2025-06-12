@@ -109,7 +109,7 @@ def main():
         dataset = load_dataset(
             path=data_args.train_file,
             cls=data_args.data_type,
-            shuffle=data_args.shuffle,
+            swap_times=data_args.swap_times,
             sample_num_one_query=data_args.sample_num_one_query,
             first_rank_thresh=data_args.first_rank_thresh,
         )
@@ -118,7 +118,7 @@ def main():
             path=data_args.train_file_dir,
             cls=data_args.data_type,
             training_args=training_args,
-            shuffle=data_args.shuffle,
+            swap_times=data_args.swap_times,
             sample_num_one_query=data_args.sample_num_one_query,
             first_rank_thresh=data_args.first_rank_thresh,
         )

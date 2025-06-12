@@ -16,6 +16,14 @@ from torch.utils.data.dataloader import DataLoader, Sampler, RandomSampler, Batc
 logger = logging.getLogger(__name__)
 
 
+def partial_shuffle(lst, swap_times):
+    n = len(lst)
+    for _ in range(swap_times):
+        i, j = random.randrange(n), random.randrange(n)
+        lst[i], lst[j] = lst[j], lst[i]
+    return lst
+
+
 class KeyValueDataset(Dataset):
     def __init__(self, data_dict):
         """
@@ -125,7 +133,7 @@ class DDPDatasetWithRank(Dataset):
 
 
 class KnowledgeDistillDataset(Dataset):
-    def __init__(self, all_data, sample_num=2, shuffle=True, first_rank_thresh=1000):
+    def __init__(self, all_data, sample_num=2, swap_times=0, first_rank_thresh=1000):
         """
         Args:
             data: A list of dictionary which have "query", "docs" and "scores" list.
@@ -150,34 +158,19 @@ class KnowledgeDistillDataset(Dataset):
             else:
                 scores = [None] * len(texts)
 
-            if shuffle:
-                idxs = list(range(len(scores)))
-                random.shuffle(idxs)
-                for i in range(0, len(scores), sample_num):
-                    # we need to make sure all samples have same negative number
-                    # to split all documents and perform matmul
-                    if len(scores) - i < sample_num:
-                        break
-                    sample_idxs = idxs[i : i + sample_num]
-                    self.data.append(
-                        [
-                            query,
-                            [texts[idx] for idx in sample_idxs],
-                            [scores[idx] for idx in sample_idxs],
-                        ]
-                    )
-            else:
-                idxs = list(range(len(scores)))
-                step = len(scores) // sample_num
-                for i in range(0, step):
-                    sample_idxs = [idxs[j * step + i] for j in range(sample_num)]
-                    self.data.append(
-                        [
-                            query,
-                            [texts[idx] for idx in sample_idxs],
-                            [scores[idx] for idx in sample_idxs],
-                        ]
-                    )
+            idxs = list(range(len(scores)))
+            if swap_times > 0:
+                idxs = partial_shuffle(idxs, swap_times)
+            step = len(scores) // sample_num
+            for i in range(0, step):
+                sample_idxs = [idxs[j * step + i] for j in range(sample_num)]
+                self.data.append(
+                    [
+                        query,
+                        [texts[idx] for idx in sample_idxs],
+                        [scores[idx] for idx in sample_idxs],
+                    ]
+                )
         logger.info(
             f"KnowledgeDistillDataset after process data number: {len(self.data)}"
         )
@@ -190,7 +183,7 @@ class KnowledgeDistillDataset(Dataset):
 
 
 class KnowledgeDistillIdsDataset(Dataset):
-    def __init__(self, all_data, sample_num=2, shuffle=True, first_rank_thresh=1000):
+    def __init__(self, all_data, sample_num=2, swap_times=0, first_rank_thresh=1000):
         """
         Args:
             data: A list of dictionary which have "query", "docs", "q_id", "d_ids" and "scores" list.
@@ -207,44 +200,18 @@ class KnowledgeDistillIdsDataset(Dataset):
             if first_rank < 0 or first_rank > first_rank_thresh:
                 continue
 
-            texts = data["docs"]
-
-            if shuffle:
-                idxs = list(range(len(texts)))
-                random.shuffle(idxs)
-                for i in range(0, len(texts), sample_num):
-                    # we need to make sure all samples have same negative number
-                    # to split all documents and perform matmul
-                    if len(texts) - i < sample_num:
-                        break
-                    sample_idxs = idxs[i : i + sample_num]
-                    self.data.append(
-                        [
-                            data_idx,
-                            sample_idxs,
-                            # query,
-                            # q_id,
-                            # [texts[idx] for idx in sample_idxs],
-                            # [d_ids[idx] for idx in sample_idxs],
-                            # [scores[idx] for idx in sample_idxs],
-                        ]
-                    )
-            else:
-                idxs = list(range(len(texts)))
-                step = len(texts) // sample_num
-                for i in range(0, step):
-                    sample_idxs = [idxs[j * step + i] for j in range(sample_num)]
-                    self.data.append(
-                        [
-                            data_idx,
-                            sample_idxs,
-                            # query,
-                            # q_id,
-                            # [texts[idx] for idx in sample_idxs],
-                            # [d_ids[idx] for idx in sample_idxs],
-                            # [scores[idx] for idx in sample_idxs],
-                        ]
-                    )
+            idxs = list(range(len(data["docs"])))
+            if swap_times > 0:
+                idxs = partial_shuffle(idxs, swap_times)
+            step = len(idxs) // sample_num
+            for i in range(0, step):
+                sample_idxs = [idxs[j * step + i] for j in range(sample_num)]
+                self.data.append(
+                    [
+                        data_idx,
+                        sample_idxs,
+                    ]
+                )
         logger.info(
             f"KnowledgeDistillIdsDataset after process data number: {len(self.data)}"
         )
@@ -304,7 +271,7 @@ class MsMarcoKDDataset(KnowledgeDistillDataset):
             data = {"query": queries[q_id], "docs": texts, "scores": scores}
             all_data.append(data)
 
-        super().__init__(all_data=all_data, sample_num=sample_num, shuffle=False)
+        super().__init__(all_data=all_data, sample_num=sample_num, swap_times=0)
 
     def __len__(self):
         return len(self.data)
@@ -439,13 +406,13 @@ DATASET_CLS_MAP = {
 
 
 def load_dataset(
-    path, cls, shuffle=False, sample_num_one_query=2, first_rank_thresh=1000
+    path, cls, swap_times=0, sample_num_one_query=2, first_rank_thresh=1000
 ):
     logger.info(f"load dataset from {path}. dataset cls: {DATASET_CLS_MAP[cls]}")
     return DATASET_CLS_MAP[cls](
         DatasetsDataset.load_from_disk(path),
         sample_num=sample_num_one_query,
-        shuffle=shuffle,
+        swap_times=swap_times,
         first_rank_thresh=first_rank_thresh,
     )
 
@@ -454,7 +421,7 @@ def load_datasets(
     path,
     cls,
     training_args,
-    shuffle=False,
+    swap_times=0,
     sample_num_one_query=2,
     first_rank_thresh=1000,
 ):
@@ -464,7 +431,7 @@ def load_datasets(
             dataset_path = os.path.join(path, dataset)
             datasets.append(
                 load_dataset(
-                    dataset_path, cls, shuffle, sample_num_one_query, first_rank_thresh
+                    dataset_path, cls, swap_times, sample_num_one_query, first_rank_thresh
                 )
             )
     else:
@@ -475,7 +442,7 @@ def load_datasets(
                     load_dataset(
                         dataset_path,
                         cls,
-                        shuffle,
+                        swap_times,
                         sample_num_one_query,
                         first_rank_thresh,
                     )
