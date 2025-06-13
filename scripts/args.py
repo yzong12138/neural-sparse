@@ -42,6 +42,8 @@ class DataTrainingArguments:
     query_prune: float = field(default=0)
     flops_threshold: int = field(default=None)
     swap_times: float = field(default=0)
+    temperature: float = field(default=1.0)
+    score_scale: float = field(default=1.0)
 
     def __post_init__(self):
         return

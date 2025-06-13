@@ -1,7 +1,10 @@
+import bisect
 import os
 import json
 import logging
 import random
+import itertools
+import numpy as np
 
 from ..utils import is_ddp_enabled
 
@@ -17,11 +20,24 @@ logger = logging.getLogger(__name__)
 
 
 def partial_shuffle(lst, swap_times):
-    n = len(lst)
-    for _ in range(swap_times):
-        i, j = random.randrange(n), random.randrange(n)
-        lst[i], lst[j] = lst[j], lst[i]
-    return lst
+    """Optimized partial shuffle using numpy"""
+    if swap_times <= 0:
+        return lst
+    
+    arr = np.array(lst)
+    n = len(arr)
+    
+    # Generate all random indices at once for better performance
+    if swap_times >= n // 2:
+        # If swap_times is large, just do a full shuffle
+        np.random.shuffle(arr)
+    else:
+        # Generate random pairs for swapping
+        indices = np.random.randint(0, n, size=(swap_times, 2))
+        for i, j in indices:
+            arr[i], arr[j] = arr[j], arr[i]
+    
+    return arr.tolist()
 
 
 class KeyValueDataset(Dataset):
@@ -133,53 +149,61 @@ class DDPDatasetWithRank(Dataset):
 
 
 class KnowledgeDistillDataset(Dataset):
-    def __init__(self, all_data, sample_num=2, swap_times=0, first_rank_thresh=1000):
+    def __init__(self, all_data, sample_num=2, swap_times=0, first_rank_thresh=1000, score_scale=1.0):
         """
         Args:
-            data: A list of dictionary which have "query", "docs" and "scores" list.
+            all_data: A list of dictionary which have "query", "docs" and "scores" list.
                 An example: {"query":"hi","docs":["hello","hi"],"scores":[0.99,1]}
         """
-        self.data = []
-        logger.info(f"KnowledgeDistillDataset input data number: {len(all_data)}")
         assert sample_num >= 2
+        
+        logger.info(f"KnowledgeDistillDataset input data number: {len(all_data)}. score_scale: {score_scale}")
 
-        has_scores = "scores" in all_data[0]
+        if "first_rank" in all_data.column_names:
+            def filter_by_first_rank(example):
+                first_rank = example.get("first_rank", 1)
+                return first_rank >= 0 and first_rank <= first_rank_thresh
+            
+            all_data = all_data.filter(filter_by_first_rank)
+            logger.info(f"After filtering by first_rank: {len(all_data)} examples")
 
-        for data in all_data:
-            first_rank = data.get("first_rank", 1)
-            if first_rank < 0 or first_rank > first_rank_thresh:
-                continue
+        self.score_scale = score_scale
+        self.has_scores = "scores" in all_data.column_names
+        self.idxs = []
+        self.all_data = all_data
 
-            query = data["query"]
-            texts = data["docs"]
-            if has_scores:
-                scores = data["scores"]
-                assert len(texts) == len(scores)
-            else:
-                scores = [None] * len(texts)
-
-            idxs = list(range(len(scores)))
+        for ex_idx, ex in tqdm(enumerate(all_data), desc="Processing dataset"):
+            n = len(ex["docs"])
+            idxs = list(range(n))
             if swap_times > 0:
                 idxs = partial_shuffle(idxs, swap_times)
-            step = len(scores) // sample_num
-            for i in range(0, step):
-                sample_idxs = [idxs[j * step + i] for j in range(sample_num)]
-                self.data.append(
-                    [
-                        query,
-                        [texts[idx] for idx in sample_idxs],
-                        [scores[idx] for idx in sample_idxs],
-                    ]
-                )
+
+            step = n // sample_num
+            groups = [
+                [ex_idx, [idxs[k * step + i] for k in range(sample_num)]]
+                for i in range(step)
+            ]
+            self.idxs.extend(groups)
+
         logger.info(
-            f"KnowledgeDistillDataset after process data number: {len(self.data)}"
+            f"KnowledgeDistillDataset after process data number: {len(self.idxs)}"
         )
 
     def __len__(self):
-        return len(self.data)
+        return len(self.idxs)
 
-    def __getitem__(self, idx):
-        return self.data[idx]
+    def __getitem__(self, idx: int):
+        ex_idx, sample_idxs = self.idxs[idx]
+        ex = self.all_data[ex_idx]
+
+        query = ex["query"]
+        docs = [ex["docs"][i] for i in sample_idxs]
+        if self.has_scores:
+            scores = [ex["scores"][i] * self.score_scale for i in sample_idxs]
+        else:
+            scores = [None] * len(sample_idxs)
+
+        return query, docs, scores
 
 
 class KnowledgeDistillIdsDataset(Dataset):
@@ -188,54 +212,60 @@ class KnowledgeDistillIdsDataset(Dataset):
         Args:
             data: A list of dictionary which have "query", "docs", "q_id", "d_ids" and "scores" list.
         """
-        self.data = []
+        self.idxs = []
         self.all_data = all_data
         logger.info(f"KnowledgeDistillIdsDataset input data number: {len(all_data)}")
         assert sample_num >= 2
 
-        self.has_scores = "scores" in all_data[0]
+        if "first_rank" in all_data.column_names:
+            assert hasattr(all_data, 'filter')
+            def filter_by_first_rank(example):
+                first_rank = example.get("first_rank", 1)
+                return first_rank >= 0 and first_rank <= first_rank_thresh
+            
+            filtered_data = all_data.filter(filter_by_first_rank)
+            logger.info(f"After filtering by first_rank: {len(filtered_data)} examples")
+            all_data = filtered_data
+
+        self.has_scores = "scores" in all_data.column_names
 
         for data_idx, data in enumerate(all_data):
-            first_rank = data.get("first_rank", 1)
-            if first_rank < 0 or first_rank > first_rank_thresh:
-                continue
-
             idxs = list(range(len(data["docs"])))
             if swap_times > 0:
                 idxs = partial_shuffle(idxs, swap_times)
             step = len(idxs) // sample_num
             for i in range(0, step):
                 sample_idxs = [idxs[j * step + i] for j in range(sample_num)]
-                self.data.append(
+                self.idxs.append(
                     [
                         data_idx,
                         sample_idxs,
                     ]
                 )
         logger.info(
-            f"KnowledgeDistillIdsDataset after process data number: {len(self.data)}"
+            f"KnowledgeDistillIdsDataset after process data number: {len(self.idxs)}"
         )
 
     def __len__(self):
-        return len(self.data)
+        return len(self.idxs)
 
     def __getitem__(self, idx):
-        data_idx, sample_idxs = self.data[idx]
-        data = self.all_data[data_idx]
+        ex_idxs, sample_idxs = self.idxs[idx]
+        ex = self.all_data[ex_idxs]
         if self.has_scores:
             return [
-                data["query"],
-                data["q_id"],
-                [data["docs"][idx] for idx in sample_idxs],
-                [data["d_ids"][idx] for idx in sample_idxs],
-                [data["scores"][idx] for idx in sample_idxs],
+                ex["query"],
+                ex["q_id"],
+                [ex["docs"][idx] for idx in sample_idxs],
+                [ex["d_ids"][idx] for idx in sample_idxs],
+                [ex["scores"][idx] for idx in sample_idxs],
             ]
         else:
             return [
-                data["query"],
-                data["q_id"],
-                [data["docs"][idx] for idx in sample_idxs],
-                [data["d_ids"][idx] for idx in sample_idxs],
+                ex["query"],
+                ex["q_id"],
+                [ex["docs"][idx] for idx in sample_idxs],
+                [ex["d_ids"][idx] for idx in sample_idxs],
                 [None] * len(sample_idxs),
             ]
 
@@ -406,7 +436,7 @@ DATASET_CLS_MAP = {
 
 
 def load_dataset(
-    path, cls, swap_times=0, sample_num_one_query=2, first_rank_thresh=1000
+    path, cls, swap_times=0, sample_num_one_query=2, first_rank_thresh=1000, score_scale=1.0
 ):
     logger.info(f"load dataset from {path}. dataset cls: {DATASET_CLS_MAP[cls]}")
     return DATASET_CLS_MAP[cls](
@@ -414,6 +444,7 @@ def load_dataset(
         sample_num=sample_num_one_query,
         swap_times=swap_times,
         first_rank_thresh=first_rank_thresh,
+        score_scale=score_scale,
     )
 
 
@@ -424,6 +455,7 @@ def load_datasets(
     swap_times=0,
     sample_num_one_query=2,
     first_rank_thresh=1000,
+    score_scale=1.0,
 ):
     datasets = []
     if isinstance(path, str):
@@ -431,7 +463,7 @@ def load_datasets(
             dataset_path = os.path.join(path, dataset)
             datasets.append(
                 load_dataset(
-                    dataset_path, cls, swap_times, sample_num_one_query, first_rank_thresh
+                    dataset_path, cls, swap_times, sample_num_one_query, first_rank_thresh, score_scale
                 )
             )
     else:
@@ -445,6 +477,7 @@ def load_datasets(
                         swap_times,
                         sample_num_one_query,
                         first_rank_thresh,
+                        score_scale,
                     )
                 )
 

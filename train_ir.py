@@ -77,6 +77,7 @@ def main():
             loss_cls(
                 use_in_batch_negatives=data_args.use_in_batch_negatives,
                 weight=data_args.ranking_loss_weight,
+                temperature=data_args.temperature,
             )
         )
 

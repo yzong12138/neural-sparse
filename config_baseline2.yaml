@@ -2,13 +2,13 @@ logging_steps: 50
 # log_level_replica: info
 
 inf_free: true
-model_name_or_path: output/pt/with-34-pt-v2-marco/checkpoint-300000
-tokenizer_name: output/pt/with-34-pt-v2-marco/checkpoint-300000
+model_name_or_path: output/pt/with-34-marco-full/checkpoint-300000
+tokenizer_name: output/pt/with-34-marco-full/checkpoint-300000
 idf_path: idf.json
 use_l0: true
 
 max_seq_length: 256
-train_file: data/msmarco_ft3
+train_file: new_data/msmarco_llm_unrank_2
 data_type: kd
 loss_types: [kldiv]
 sample_num_one_query: 2
@@ -16,9 +16,11 @@ use_in_batch_negatives: false
 flops_d_lambda: 0.08
 flops_d_T: 10000
 ranking_loss_weight: 1
-flops_threshold: 100
+flops_threshold: 150
+swap_times: 10
+score_scale: 1.2
 
-output_dir: output/pt/with-34-pt-v2-marco/ft3
+output_dir: output/pt/with-34-marco-full/ft_llm_unrank_2-swap10-1.2
 per_device_eval_batch_size: 50
 per_device_train_batch_size: 30
 
