@@ -8,7 +8,7 @@ idf_path: idf.json
 use_l0: true
 
 max_seq_length: 256
-train_file: new_data/msmarco_llm_unrank_2
+train_file: new_data/msmarco_llm_unrank_3
 data_type: kd
 loss_types: [kldiv]
 sample_num_one_query: 2
@@ -20,7 +20,7 @@ flops_threshold: 150
 swap_times: 10
 score_scale: 1.2
 
-output_dir: output/pt/with-34-marco-full/ft_llm_unrank_2-swap10-1.2
+output_dir: output/pt/with-34-marco-full/ft_llm_unrank_3-swap10-1.2
 per_device_eval_batch_size: 50
 per_device_train_batch_size: 30
 
