@@ -23,7 +23,7 @@ kd_ensemble_teacher_kwargs:
   score_scale: 30
 first_rank_thresh: 10
 
-output_dir: output/pt/with-34-marco-co-condenser
+output_dir: output/paper/co-condenser-full-pt
 per_device_eval_batch_size: 50
 per_device_train_batch_size: 15
 

@@ -2,8 +2,8 @@ logging_steps: 50
 # log_level_replica: info
 
 inf_free: true
-model_name_or_path: output/pt/with-34-marco-co-condenser/checkpoint-300000
-tokenizer_name: output/pt/with-34-marco-co-condenser/checkpoint-300000
+model_name_or_path: output/paper/co-condenser-full-pt/checkpoint-300000
+tokenizer_name: output/paper/co-condenser-full-pt/checkpoint-300000
 idf_path: idf.json
 use_l0: true
 
@@ -20,7 +20,7 @@ flops_threshold: 150
 swap_times: 5
 score_scale: 1.2
 
-output_dir: output/pt/with-34-marco-co-condenser/ft_llm_unrank_3-swap5-1.2
+output_dir: output/paper/co-condenser-full-pt/ft_llm_unrank_3-swap5-1.2
 per_device_eval_batch_size: 50
 per_device_train_batch_size: 30
 
