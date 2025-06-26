@@ -23,10 +23,10 @@ def partial_shuffle(lst, swap_times):
     """Optimized partial shuffle using numpy"""
     if swap_times <= 0:
         return lst
-    
+
     arr = np.array(lst)
     n = len(arr)
-    
+
     # Generate all random indices at once for better performance
     if swap_times >= n // 2:
         # If swap_times is large, just do a full shuffle
@@ -36,7 +36,7 @@ def partial_shuffle(lst, swap_times):
         indices = np.random.randint(0, n, size=(swap_times, 2))
         for i, j in indices:
             arr[i], arr[j] = arr[j], arr[i]
-    
+
     return arr.tolist()
 
 
@@ -149,21 +149,32 @@ class DDPDatasetWithRank(Dataset):
 
 
 class KnowledgeDistillDataset(Dataset):
-    def __init__(self, all_data, sample_num=2, swap_times=0, first_rank_thresh=1000, score_scale=1.0):
+    def __init__(
+        self,
+        all_data,
+        sample_num=2,
+        swap_times=0,
+        first_rank_thresh=1000,
+        score_scale=1.0,
+        **kwargs,
+    ):
         """
         Args:
             all_data: A list of dictionary which have "query", "docs" and "scores" list.
                 An example: {"query":"hi","docs":["hello","hi"],"scores":[0.99,1]}
         """
         assert sample_num >= 2
-        
-        logger.info(f"KnowledgeDistillDataset input data number: {len(all_data)}. score_scale: {score_scale}")
+
+        logger.info(
+            f"KnowledgeDistillDataset input data number: {len(all_data)}. score_scale: {score_scale}"
+        )
 
         if "first_rank" in all_data.column_names:
+
             def filter_by_first_rank(example):
                 first_rank = example.get("first_rank", 1)
                 return first_rank >= 0 and first_rank <= first_rank_thresh
-            
+
             all_data = all_data.filter(filter_by_first_rank)
             logger.info(f"After filtering by first_rank: {len(all_data)} examples")
 
@@ -207,26 +218,29 @@ class KnowledgeDistillDataset(Dataset):
 
 
 class KnowledgeDistillIdsDataset(Dataset):
-    def __init__(self, all_data, sample_num=2, swap_times=0, first_rank_thresh=1000):
+    def __init__(
+        self, all_data, sample_num=2, swap_times=0, first_rank_thresh=1000, **kwargs
+    ):
         """
         Args:
             data: A list of dictionary which have "query", "docs", "q_id", "d_ids" and "scores" list.
         """
         self.idxs = []
-        self.all_data = all_data
         logger.info(f"KnowledgeDistillIdsDataset input data number: {len(all_data)}")
         assert sample_num >= 2
 
         if "first_rank" in all_data.column_names:
-            assert hasattr(all_data, 'filter')
+            assert hasattr(all_data, "filter")
+
             def filter_by_first_rank(example):
                 first_rank = example.get("first_rank", 1)
                 return first_rank >= 0 and first_rank <= first_rank_thresh
-            
+
             filtered_data = all_data.filter(filter_by_first_rank)
             logger.info(f"After filtering by first_rank: {len(filtered_data)} examples")
             all_data = filtered_data
 
+        self.all_data = all_data
         self.has_scores = "scores" in all_data.column_names
 
         for data_idx, data in enumerate(all_data):
@@ -278,7 +292,9 @@ class MsMarcoKDDataset(KnowledgeDistillDataset):
         except:
             return s
 
-    def __init__(self, score_dic_path, corpus=None, queries=None, sample_num=2):
+    def __init__(
+        self, score_dic_path, corpus=None, queries=None, sample_num=2, **kwargs
+    ):
         if corpus is None or queries is None:
             assert score_dic_path is not None
             beir_resource_url = f"https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/msmarco.zip"
@@ -436,7 +452,12 @@ DATASET_CLS_MAP = {
 
 
 def load_dataset(
-    path, cls, swap_times=0, sample_num_one_query=2, first_rank_thresh=1000, score_scale=1.0
+    path,
+    cls,
+    swap_times=0,
+    sample_num_one_query=2,
+    first_rank_thresh=1000,
+    score_scale=1.0,
 ):
     logger.info(f"load dataset from {path}. dataset cls: {DATASET_CLS_MAP[cls]}")
     return DATASET_CLS_MAP[cls](
@@ -463,7 +484,12 @@ def load_datasets(
             dataset_path = os.path.join(path, dataset)
             datasets.append(
                 load_dataset(
-                    dataset_path, cls, swap_times, sample_num_one_query, first_rank_thresh, score_scale
+                    dataset_path,
+                    cls,
+                    swap_times,
+                    sample_num_one_query,
+                    first_rank_thresh,
+                    score_scale,
                 )
             )
     else:

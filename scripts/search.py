@@ -4,7 +4,7 @@ import torch
 from tqdm import tqdm
 
 from .model.sparse_encoders import SparseModel, SparseEncoder, sparse_embedding_to_query
-from .data.dataset import KeyValueDataset
+from .dataset.dataset import KeyValueDataset
 from .utils import batch_search, get_os_client
 
 logger = logging.getLogger(__name__)

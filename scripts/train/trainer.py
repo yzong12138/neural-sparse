@@ -5,7 +5,7 @@ import torch
 from ..model.sparse_encoders import SparseModel
 from .bi_encoder_wrapper import BiEncoderWrapper, RemoteModel
 from ..utils import gather_rep
-from ..data.dataset import CombinedRandomSampler, CombinedDataset
+from ..dataset.dataset import CombinedRandomSampler, CombinedDataset
 
 from transformers import Trainer
 from transformers.trainer_utils import seed_worker

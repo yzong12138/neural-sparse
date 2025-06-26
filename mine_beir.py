@@ -4,7 +4,7 @@ import asyncio
 import logging
 import sys
 
-from scripts.data.dataset import BEIRHfDataset
+from scripts.dataset.dataset import BEIRHfDataset
 from scripts.ingest import ingest
 from scripts.search import search
 from scripts.utils import get_model

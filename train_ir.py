@@ -9,11 +9,11 @@ from dataclasses import asdict
 
 from scripts.train.trainer import SparseModelTrainer
 from scripts.train.loss import LOSS_CLS_MAP
-from scripts.data.dataset import (
+from scripts.dataset.dataset import (
     load_dataset,
     load_datasets,
 )
-from scripts.data.collator import (
+from scripts.dataset.collator import (
     COLLATOR_CLS_MAP,
 )
 from scripts.utils import set_logging, get_model

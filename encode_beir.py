@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 from torch.utils.data import DataLoader, Dataset
 from beir.datasets.data_loader import GenericDataLoader
-from scripts.data.dataset import BEIRCorpusDataset
+from scripts.dataset.dataset import BEIRCorpusDataset
 from scripts.model.sparse_encoders import SparseModel, SparseEncoder
 
 

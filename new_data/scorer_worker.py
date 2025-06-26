@@ -130,7 +130,7 @@ def main():
     dataset = select_dataset(dataset, total_processes, process_rank)
 
     logger.info(f"Process {process_rank} processing {len(dataset)} samples")
-    
+
     if identifier.startswith("bge"):
         pairs = get_pairs(dataset)
         all_scores = scorer.score_pairs(pairs)

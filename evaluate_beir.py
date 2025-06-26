@@ -8,7 +8,7 @@ from dataclasses import asdict
 import pandas as pd
 import asyncio
 
-from scripts.data.dataset import BEIRCorpusDataset
+from scripts.dataset.dataset import BEIRCorpusDataset
 from scripts.ingest import ingest
 from scripts.search import search
 from scripts.utils import set_logging, get_model
