@@ -129,7 +129,16 @@ class SparseModel(torch.nn.Module):
         out = torch.zeros(batch_size, self.vocab_size, device=input_ids.device)
         out[torch.arange(batch_size).unsqueeze(-1), input_ids] = 1
         out[:, self.special_token_ids] = 0
-        return out * torch.relu(self.idf_vector)
+
+        output = self.backbone(**kwargs)[0]
+        values, _ = torch.max(
+            output * kwargs.get("attention_mask").unsqueeze(-1), dim=1
+        )
+        values = torch.log1p(torch.relu(values))
+        if self.use_l0:
+            values = torch.log1p(values)
+
+        return out * values
 
 
 class SparsePostProcessor(object):

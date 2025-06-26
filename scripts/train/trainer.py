@@ -107,7 +107,7 @@ class SparseModelTrainer(Trainer):
             self.data_args.flops_d_lambda, self.data_args.flops_d_T
         )
 
-        if not self.model_args.inf_free:
+        if not self.model_args.inf_free or True:
             flops_loss += self.flops_value(q_rep) * self.get_lambda(
                 self.data_args.flops_q_lambda, self.data_args.flops_q_T
             )
