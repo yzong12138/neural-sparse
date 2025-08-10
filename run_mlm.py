@@ -146,6 +146,15 @@ class ModelArguments:
             )
         },
     )
+    train_only_embeddings: bool = field(
+        default=False,
+        metadata={
+            "help": (
+                "If True, only train the embedding layers (input and output embeddings) and freeze all other parameters. "
+                "This is useful for embedding-only fine-tuning."
+            )
+        },
+    )
 
     def __post_init__(self):
         if self.config_overrides is not None and (self.config_name is not None or self.model_name_or_path is not None):
@@ -450,6 +459,34 @@ def main():
     embedding_size = model.get_input_embeddings().weight.shape[0]
     if len(tokenizer) > embedding_size:
         model.resize_token_embeddings(len(tokenizer))
+
+    # Freeze all parameters except embeddings if train_only_embeddings is True
+    if model_args.train_only_embeddings:
+        logger.info("Freezing all parameters except embedding layers for embedding-only training")
+        
+        # Get input and output embedding layers
+        input_embeddings = model.get_input_embeddings()
+        output_embeddings = model.get_output_embeddings()
+        
+        # Freeze all parameters in the model
+        for param in model.parameters():
+            param.requires_grad = False
+        
+        # Unfreeze embedding layers
+        if input_embeddings is not None:
+            for param in input_embeddings.parameters():
+                param.requires_grad = True
+            logger.info(f"Input embeddings unfrozen: {input_embeddings.weight.shape}")
+        
+        if output_embeddings is not None:
+            for param in output_embeddings.parameters():
+                param.requires_grad = True
+            logger.info(f"Output embeddings unfrozen: {output_embeddings.weight.shape}")
+        
+        # Count trainable parameters
+        trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        total_params = sum(p.numel() for p in model.parameters())
+        logger.info(f"Trainable parameters: {trainable_params:,} / {total_params:,} ({100 * trainable_params / total_params:.2f}%)")
 
     # Preprocessing the datasets.
     # First we tokenize all the texts.
