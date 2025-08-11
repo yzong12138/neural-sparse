@@ -1,8 +1,17 @@
 #!/bin/bash
 set -e
 
-# Define the list of config files you want to process
-CONFIG_FILES=("config_baseline.yaml" "config_baseline2.yaml" "config_baseline3.yaml")
+# Dynamically find all config files matching the pattern config_baseline*.yaml
+CONFIG_FILES=($(ls config_baseline*.yaml 2>/dev/null | sort -V))
+
+# Check if any config files were found
+if [ ${#CONFIG_FILES[@]} -eq 0 ]; then
+    echo "No config files matching pattern 'config_baseline*.yaml' found in current directory."
+    exit 1
+fi
+
+echo "Found ${#CONFIG_FILES[@]} config file(s): ${CONFIG_FILES[*]}"
+echo "=========================================="
 
 # Loop through each config file
 for CONFIG_PATH in "${CONFIG_FILES[@]}"
