@@ -49,7 +49,7 @@ def main():
 
     model = get_model(model_args)
 
-    accelerator = Accelerator(mixed_precision="fp16")
+    accelerator = Accelerator()
     accelerator.wait_for_everyone()
 
     datasets = data_args.beir_datasets.split(",")

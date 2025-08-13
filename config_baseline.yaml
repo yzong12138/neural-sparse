@@ -2,36 +2,32 @@ logging_steps: 50
 # log_level_replica: info
 
 inf_free: true
-model_name_or_path: output/paper/co-condenser-full-pt/checkpoint-300000
-tokenizer_name: output/paper/co-condenser-full-pt/checkpoint-300000
+model_name_or_path: /home/ubuntu/bowdpr/examples/pretrain/mdbert-bow-fp32/checkpoint-20000
+tokenizer_name: /home/ubuntu/bowdpr/examples/pretrain/mdbert-bow-fp32/checkpoint-20000
 idf_path: idf.json
-use_l0: true
 
 max_seq_length: 256
-train_file: new_data/msmarco_llm_unrank_3
+train_file: data/msmarco_ft
 data_type: kd
 loss_types: [kldiv]
 sample_num_one_query: 2
 use_in_batch_negatives: false
 flops_d_lambda: 0.08
-flops_d_T: 10000
-ranking_loss_weight: 1
+flops_d_T: 40000
+use_l0: true
 flops_threshold: 150
-swap_times: 5
-score_scale: 1.2
 
-output_dir: output/paper/co-condenser-full-pt/ft_llm_unrank_3-swap5-1.2
+output_dir: output/baselines/mdbert-bow-fp32-checkpoint-20000
 per_device_eval_batch_size: 50
-per_device_train_batch_size: 30
+per_device_train_batch_size: 20
 
 log_level: info
-max_steps: 50000
-fp16: true
+max_steps: 100000
 learning_rate: 0.00002
 weight_decay: 0.01
 lr_scheduler_type: linear
 warmup_steps: 6000
 save_strategy: steps
-save_steps: 50000
+save_steps: 100000
 dataloader_drop_last: true
 max_grad_norm: null

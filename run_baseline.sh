@@ -60,8 +60,10 @@ do
     fi
     echo "PREPROCESS_FUNC: $PREPROCESS_FUNC"
 
-    # Train the model
-    torchrun --nproc_per_node=${N_DEVICES} train_ir.py $CONFIG_PATH
+    # if file name is not config_baseline.yaml, train the model
+    if [ "$CONFIG_PATH" != "config_baseline.yaml" ]; then
+        torchrun --nproc_per_node=${N_DEVICES} train_ir.py $CONFIG_PATH
+    fi
 
     # Evaluate the model
     for step in {$MAX_STEPS,}
