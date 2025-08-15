@@ -2,11 +2,10 @@
 set -e
 
 # Dynamically find all config files matching the pattern config_baseline*.yaml
-CONFIG_FILES=($(ls config_baseline*.yaml 2>/dev/null | sort -V))
+CONFIG_FILES=($(ls config_baseline[0-9]*.yaml 2>/dev/null | sort -V))
 
-# Check if any config files were found
 if [ ${#CONFIG_FILES[@]} -eq 0 ]; then
-    echo "No config files matching pattern 'config_baseline*.yaml' found in current directory."
+    echo "No config files matching pattern 'config_baseline[0-9]*.yaml' found in current directory."
     exit 1
 fi
 
