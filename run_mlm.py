@@ -32,6 +32,7 @@ from typing import Optional
 import datasets
 import evaluate
 import torch
+import torch.nn.functional as F
 from datasets import load_dataset
 
 import transformers
@@ -56,11 +57,84 @@ from transformers.utils.versions import require_version
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
 check_min_version("4.50.0")
 
-require_version("datasets>=2.14.0", "To fix: pip install -r examples/pytorch/language-modeling/requirements.txt")
+require_version(
+    "datasets>=2.14.0",
+    "To fix: pip install -r examples/pytorch/language-modeling/requirements.txt",
+)
 
 logger = logging.getLogger(__name__)
 MODEL_CONFIG_CLASSES = list(MODEL_FOR_MASKED_LM_MAPPING.keys())
 MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
+
+
+class DataCollatorForLMWithPresence:
+    def __init__(
+        self, base_collator: DataCollatorForLanguageModeling, tokenizer: AutoTokenizer
+    ):
+        self.base_collator = base_collator
+        self.tokenizer = tokenizer
+        self.tokenizer_special_token_ids = list(tokenizer.all_special_ids)
+
+    def __call__(self, features):
+        vocab_size = len(self.tokenizer)
+        batch_size = len(features)
+
+        bow_vector = torch.zeros((batch_size, vocab_size), dtype=torch.float32)
+
+        for i, feature in enumerate(features):
+            input_ids = feature.get("input_ids")
+            if input_ids is None:
+                raise ValueError("input_ids is None")
+
+            if isinstance(input_ids, torch.Tensor):
+                ids_tensor = input_ids.detach()
+            else:
+                ids_tensor = torch.tensor(input_ids, dtype=torch.long)
+
+            bow_vector[i, ids_tensor] = 1.0
+            bow_vector[i, self.tokenizer_special_token_ids] = 0.0
+
+        batch = self.base_collator(features)
+        batch["bow_vector"] = bow_vector
+        return batch
+
+
+class TrainerWithExtraField(Trainer):
+    custom_metrics = {"bow_loss": 0.0, "mlm_loss": 0.0}
+    steps = 0
+
+    def compute_loss(self, model, inputs, *args, **kwargs):
+        inputs = dict(inputs)
+        bow_vector = inputs.pop("bow_vector")
+        mlm_loss, outputs = super().compute_loss(model, inputs, return_outputs=True)
+
+        rep_logits = outputs["logits"][:, 0]
+        rep_logits_softmax = F.log_softmax(rep_logits, dim=-1)
+        bow_weights = bow_vector / bow_vector.sum(dim=-1, keepdim=True).clamp(min=1)
+        bow_loss = torch.mean(-torch.sum(bow_weights * rep_logits_softmax, dim=1))
+
+        self.custom_metrics["bow_loss"] += bow_loss
+        self.custom_metrics["mlm_loss"] += mlm_loss
+        self.steps += 1
+
+        assert kwargs.get("return_outputs", False) is False
+        return mlm_loss + bow_loss
+
+    def log(self, logs, *args, **kwargs):
+        if "loss" in logs:
+            bow_loss_scalar = (
+                self._nested_gather(self.custom_metrics["bow_loss"]).mean().item()
+            )
+            logs["bow_loss"] = round(bow_loss_scalar / self.steps, 4)
+            mlm_loss_scalar = (
+                self._nested_gather(self.custom_metrics["mlm_loss"]).mean().item()
+            )
+            logs["mlm_loss"] = round(mlm_loss_scalar / self.steps, 4)
+            self.steps = 0
+            self.custom_metrics["bow_loss"] = 0.0
+            self.custom_metrics["mlm_loss"] = 0.0
+
+        super().log(logs, *args, **kwargs)
 
 
 @dataclass
@@ -79,7 +153,10 @@ class ModelArguments:
     )
     model_type: Optional[str] = field(
         default=None,
-        metadata={"help": "If training from scratch, pass a model type from the list: " + ", ".join(MODEL_TYPES)},
+        metadata={
+            "help": "If training from scratch, pass a model type from the list: "
+            + ", ".join(MODEL_TYPES)
+        },
     )
     config_overrides: Optional[str] = field(
         default=None,
@@ -91,22 +168,34 @@ class ModelArguments:
         },
     )
     config_name: Optional[str] = field(
-        default=None, metadata={"help": "Pretrained config name or path if not the same as model_name"}
+        default=None,
+        metadata={
+            "help": "Pretrained config name or path if not the same as model_name"
+        },
     )
     tokenizer_name: Optional[str] = field(
-        default=None, metadata={"help": "Pretrained tokenizer name or path if not the same as model_name"}
+        default=None,
+        metadata={
+            "help": "Pretrained tokenizer name or path if not the same as model_name"
+        },
     )
     cache_dir: Optional[str] = field(
         default=None,
-        metadata={"help": "Where do you want to store the pretrained models downloaded from huggingface.co"},
+        metadata={
+            "help": "Where do you want to store the pretrained models downloaded from huggingface.co"
+        },
     )
     use_fast_tokenizer: bool = field(
         default=True,
-        metadata={"help": "Whether to use one of the fast tokenizer (backed by the tokenizers library) or not."},
+        metadata={
+            "help": "Whether to use one of the fast tokenizer (backed by the tokenizers library) or not."
+        },
     )
     model_revision: str = field(
         default="main",
-        metadata={"help": "The specific model version to use (can be a branch name, tag name or commit id)."},
+        metadata={
+            "help": "The specific model version to use (can be a branch name, tag name or commit id)."
+        },
     )
     token: str = field(
         default=None,
@@ -157,7 +246,9 @@ class ModelArguments:
     )
 
     def __post_init__(self):
-        if self.config_overrides is not None and (self.config_name is not None or self.model_name_or_path is not None):
+        if self.config_overrides is not None and (
+            self.config_name is not None or self.model_name_or_path is not None
+        ):
             raise ValueError(
                 "--config_overrides can't be used in combination with --config_name or --model_name_or_path"
             )
@@ -170,18 +261,27 @@ class DataTrainingArguments:
     """
 
     dataset_name: Optional[str] = field(
-        default=None, metadata={"help": "The name of the dataset to use (via the datasets library)."}
+        default=None,
+        metadata={"help": "The name of the dataset to use (via the datasets library)."},
     )
     dataset_config_name: Optional[str] = field(
-        default=None, metadata={"help": "The configuration name of the dataset to use (via the datasets library)."}
+        default=None,
+        metadata={
+            "help": "The configuration name of the dataset to use (via the datasets library)."
+        },
     )
-    train_file: Optional[str] = field(default=None, metadata={"help": "The input training data file (a text file)."})
+    train_file: Optional[str] = field(
+        default=None, metadata={"help": "The input training data file (a text file)."}
+    )
     validation_file: Optional[str] = field(
         default=None,
-        metadata={"help": "An optional input evaluation data file to evaluate the perplexity on (a text file)."},
+        metadata={
+            "help": "An optional input evaluation data file to evaluate the perplexity on (a text file)."
+        },
     )
     overwrite_cache: bool = field(
-        default=False, metadata={"help": "Overwrite the cached training and evaluation sets"}
+        default=False,
+        metadata={"help": "Overwrite the cached training and evaluation sets"},
     )
     validation_split_percentage: Optional[int] = field(
         default=5,
@@ -203,11 +303,14 @@ class DataTrainingArguments:
         metadata={"help": "The number of processes to use for the preprocessing."},
     )
     mlm_probability: float = field(
-        default=0.15, metadata={"help": "Ratio of tokens to mask for masked language modeling loss"}
+        default=0.15,
+        metadata={"help": "Ratio of tokens to mask for masked language modeling loss"},
     )
     line_by_line: bool = field(
         default=False,
-        metadata={"help": "Whether distinct lines of text in the dataset are to be handled as distinct sequences."},
+        metadata={
+            "help": "Whether distinct lines of text in the dataset are to be handled as distinct sequences."
+        },
     )
     pad_to_max_length: bool = field(
         default=False,
@@ -240,19 +343,31 @@ class DataTrainingArguments:
 
     def __post_init__(self):
         if self.streaming:
-            require_version("datasets>=2.0.0", "The streaming feature requires `datasets>=2.0.0`")
+            require_version(
+                "datasets>=2.0.0", "The streaming feature requires `datasets>=2.0.0`"
+            )
 
-        if self.dataset_name is None and self.train_file is None and self.validation_file is None:
-            raise ValueError("Need either a dataset name or a training/validation file.")
+        if (
+            self.dataset_name is None
+            and self.train_file is None
+            and self.validation_file is None
+        ):
+            raise ValueError(
+                "Need either a dataset name or a training/validation file."
+            )
         else:
             if self.train_file is not None:
                 extension = self.train_file.split(".")[-1]
                 if extension not in ["csv", "json", "txt", "jsonl"]:
-                    raise ValueError("`train_file` should be a csv, a json or a txt file.")
+                    raise ValueError(
+                        "`train_file` should be a csv, a json or a txt file."
+                    )
             if self.validation_file is not None:
                 extension = self.validation_file.split(".")[-1]
                 if extension not in ["csv", "json", "txt", "jsonl"]:
-                    raise ValueError("`validation_file` should be a csv, a json or a txt file.")
+                    raise ValueError(
+                        "`validation_file` should be a csv, a json or a txt file."
+                    )
 
 
 def main():
@@ -260,11 +375,15 @@ def main():
     # or by passing the --help flag to this script.
     # We now keep distinct sets of args, for a cleaner separation of concerns.
 
-    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, TrainingArguments))
+    parser = HfArgumentParser(
+        (ModelArguments, DataTrainingArguments, TrainingArguments)
+    )
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
         # If we pass only one argument to the script and it's the path to a json file,
         # let's parse it to get our arguments.
-        model_args, data_args, training_args = parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
+        model_args, data_args, training_args = parser.parse_json_file(
+            json_file=os.path.abspath(sys.argv[1])
+        )
     else:
         model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
@@ -300,14 +419,20 @@ def main():
 
     # Detecting last checkpoint.
     last_checkpoint = None
-    if os.path.isdir(training_args.output_dir) and training_args.do_train and not training_args.overwrite_output_dir:
+    if (
+        os.path.isdir(training_args.output_dir)
+        and training_args.do_train
+        and not training_args.overwrite_output_dir
+    ):
         last_checkpoint = get_last_checkpoint(training_args.output_dir)
         if last_checkpoint is None and len(os.listdir(training_args.output_dir)) > 0:
             raise ValueError(
                 f"Output directory ({training_args.output_dir}) already exists and is not empty. "
                 "Use --overwrite_output_dir to overcome."
             )
-        elif last_checkpoint is not None and training_args.resume_from_checkpoint is None:
+        elif (
+            last_checkpoint is not None and training_args.resume_from_checkpoint is None
+        ):
             logger.info(
                 f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
                 "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
@@ -407,7 +532,9 @@ def main():
     if model_args.config_name:
         config = AutoConfig.from_pretrained(model_args.config_name, **config_kwargs)
     elif model_args.model_name_or_path:
-        config = AutoConfig.from_pretrained(model_args.model_name_or_path, **config_kwargs)
+        config = AutoConfig.from_pretrained(
+            model_args.model_name_or_path, **config_kwargs
+        )
     else:
         config = CONFIG_MAPPING[model_args.model_type]()
         logger.warning("You are instantiating a new config instance from scratch.")
@@ -424,9 +551,13 @@ def main():
         "trust_remote_code": model_args.trust_remote_code,
     }
     if model_args.tokenizer_name:
-        tokenizer = AutoTokenizer.from_pretrained(model_args.tokenizer_name, **tokenizer_kwargs)
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_args.tokenizer_name, **tokenizer_kwargs
+        )
     elif model_args.model_name_or_path:
-        tokenizer = AutoTokenizer.from_pretrained(model_args.model_name_or_path, **tokenizer_kwargs)
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_args.model_name_or_path, **tokenizer_kwargs
+        )
     else:
         raise ValueError(
             "You are instantiating a new tokenizer from scratch. This is not supported by this script. "
@@ -452,7 +583,9 @@ def main():
         )
     else:
         logger.info("Training new model from scratch")
-        model = AutoModelForMaskedLM.from_config(config, trust_remote_code=model_args.trust_remote_code)
+        model = AutoModelForMaskedLM.from_config(
+            config, trust_remote_code=model_args.trust_remote_code
+        )
 
     # We resize the embeddings only when necessary to avoid index errors. If you are creating a model from scratch
     # on a small vocab and want a smaller embedding size, remove this test.
@@ -462,31 +595,35 @@ def main():
 
     # Freeze all parameters except embeddings if train_only_embeddings is True
     if model_args.train_only_embeddings:
-        logger.info("Freezing all parameters except embedding layers for embedding-only training")
-        
+        logger.info(
+            "Freezing all parameters except embedding layers for embedding-only training"
+        )
+
         # Get input and output embedding layers
         input_embeddings = model.get_input_embeddings()
         output_embeddings = model.get_output_embeddings()
-        
+
         # Freeze all parameters in the model
         for param in model.parameters():
             param.requires_grad = False
-        
+
         # Unfreeze embedding layers
         if input_embeddings is not None:
             for param in input_embeddings.parameters():
                 param.requires_grad = True
             logger.info(f"Input embeddings unfrozen: {input_embeddings.weight.shape}")
-        
+
         if output_embeddings is not None:
             for param in output_embeddings.parameters():
                 param.requires_grad = True
             logger.info(f"Output embeddings unfrozen: {output_embeddings.weight.shape}")
-        
+
         # Count trainable parameters
         trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
         total_params = sum(p.numel() for p in model.parameters())
-        logger.info(f"Trainable parameters: {trainable_params:,} / {total_params:,} ({100 * trainable_params / total_params:.2f}%)")
+        logger.info(
+            f"Trainable parameters: {trainable_params:,} / {total_params:,} ({100 * trainable_params / total_params:.2f}%)"
+        )
 
     # Preprocessing the datasets.
     # First we tokenize all the texts.
@@ -520,7 +657,9 @@ def main():
         def tokenize_function(examples):
             # Remove empty lines
             examples[text_column_name] = [
-                line for line in examples[text_column_name] if len(line) > 0 and not line.isspace()
+                line
+                for line in examples[text_column_name]
+                if len(line) > 0 and not line.isspace()
             ]
             return tokenizer(
                 examples[text_column_name],
@@ -554,7 +693,9 @@ def main():
         # We use `return_special_tokens_mask=True` because DataCollatorForLanguageModeling (see below) is more
         # efficient when it receives the `special_tokens_mask`.
         def tokenize_function(examples):
-            return tokenizer(examples[text_column_name], return_special_tokens_mask=True)
+            return tokenizer(
+                examples[text_column_name], return_special_tokens_mask=True
+            )
 
         with training_args.main_process_first(desc="dataset map tokenization"):
             if not data_args.streaming:
@@ -578,14 +719,19 @@ def main():
         # max_seq_length.
         def group_texts(examples):
             # Concatenate all texts.
-            concatenated_examples = {k: list(chain(*examples[k])) for k in examples.keys()}
+            concatenated_examples = {
+                k: list(chain(*examples[k])) for k in examples.keys()
+            }
             total_length = len(concatenated_examples[list(examples.keys())[0]])
             # We drop the small remainder, and if the total_length < max_seq_length  we exclude this batch and return an empty dict.
             # We could add padding if the model supported it instead of this drop, you can customize this part to your needs.
             total_length = (total_length // max_seq_length) * max_seq_length
             # Split by chunks of max_len.
             result = {
-                k: [t[i : i + max_seq_length] for i in range(0, total_length, max_seq_length)]
+                k: [
+                    t[i : i + max_seq_length]
+                    for i in range(0, total_length, max_seq_length)
+                ]
                 for k, t in concatenated_examples.items()
             }
             return result
@@ -651,25 +797,36 @@ def main():
 
     # Data collator
     # This one will take care of randomly masking the tokens.
-    pad_to_multiple_of_8 = data_args.line_by_line and training_args.fp16 and not data_args.pad_to_max_length
-    data_collator = DataCollatorForLanguageModeling(
+    pad_to_multiple_of_8 = (
+        data_args.line_by_line
+        and training_args.fp16
+        and not data_args.pad_to_max_length
+    )
+    base_data_collator = DataCollatorForLanguageModeling(
         tokenizer=tokenizer,
         mlm_probability=data_args.mlm_probability,
         pad_to_multiple_of=8 if pad_to_multiple_of_8 else None,
     )
+    data_collator = DataCollatorForLMWithPresence(base_data_collator, tokenizer)
 
     # Initialize our Trainer
-    trainer = Trainer(
+    trainer = TrainerWithExtraField(
         model=model,
         args=training_args,
         train_dataset=train_dataset if training_args.do_train else None,
         eval_dataset=eval_dataset if training_args.do_eval else None,
         processing_class=tokenizer,
         data_collator=data_collator,
-        compute_metrics=compute_metrics if training_args.do_eval and not is_torch_xla_available() else None,
-        preprocess_logits_for_metrics=preprocess_logits_for_metrics
-        if training_args.do_eval and not is_torch_xla_available()
-        else None,
+        compute_metrics=(
+            compute_metrics
+            if training_args.do_eval and not is_torch_xla_available()
+            else None
+        ),
+        preprocess_logits_for_metrics=(
+            preprocess_logits_for_metrics
+            if training_args.do_eval and not is_torch_xla_available()
+            else None
+        ),
     )
 
     # Training
@@ -684,7 +841,9 @@ def main():
         metrics = train_result.metrics
 
         max_train_samples = (
-            data_args.max_train_samples if data_args.max_train_samples is not None else len(train_dataset)
+            data_args.max_train_samples
+            if data_args.max_train_samples is not None
+            else len(train_dataset)
         )
         metrics["train_samples"] = min(max_train_samples, len(train_dataset))
 
@@ -698,7 +857,11 @@ def main():
 
         metrics = trainer.evaluate()
 
-        max_eval_samples = data_args.max_eval_samples if data_args.max_eval_samples is not None else len(eval_dataset)
+        max_eval_samples = (
+            data_args.max_eval_samples
+            if data_args.max_eval_samples is not None
+            else len(eval_dataset)
+        )
         metrics["eval_samples"] = min(max_eval_samples, len(eval_dataset))
         try:
             perplexity = math.exp(metrics["eval_loss"])
@@ -714,7 +877,9 @@ def main():
         kwargs["dataset_tags"] = data_args.dataset_name
         if data_args.dataset_config_name is not None:
             kwargs["dataset_args"] = data_args.dataset_config_name
-            kwargs["dataset"] = f"{data_args.dataset_name} {data_args.dataset_config_name}"
+            kwargs["dataset"] = (
+                f"{data_args.dataset_name} {data_args.dataset_config_name}"
+            )
         else:
             kwargs["dataset"] = data_args.dataset_name
 
