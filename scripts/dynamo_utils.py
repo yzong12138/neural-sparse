@@ -90,84 +90,59 @@ def batch_get_vectors(
     # 创建一个字典存储获取到的向量，以text_id为键
     id_to_vector = {}
 
-    # 分批处理去重后的ID列表
-    for batch_start in range(0, len(unique_text_ids), max_batch_size):
-        batch_end = min(batch_start + max_batch_size, len(unique_text_ids))
-        batch_ids = unique_text_ids[batch_start:batch_end]
+    # 外层按缺失情况重试：如果result_vectors中仍存在None，则仅对缺失ID重试
+    max_retries = 10
+    retry_attempts = 0
+    remaining_ids = list(unique_text_ids)
 
-        # 构建批量获取请求
-        keys_list = [
-            {"text_id": {"N": str(text_id)}, "model_id": {"N": model_id_str}}
-            for text_id in batch_ids
-        ]
+    while remaining_ids and retry_attempts <= max_retries:
+        # 分批获取 remaining_ids
+        for batch_start in range(0, len(remaining_ids), max_batch_size):
+            batch_end = min(batch_start + max_batch_size, len(remaining_ids))
+            batch_ids = remaining_ids[batch_start:batch_end]
 
-        response = dynamodb_client.batch_get_item(
-            RequestItems={
-                table_name: {
-                    "Keys": keys_list,
-                    "ConsistentRead": True,  # 保证读取一致性
-                }
-            }
-        )
+            keys_list = [
+                {"text_id": {"N": str(text_id)}, "model_id": {"N": model_id_str}}
+                for text_id in batch_ids
+            ]
 
-        # 处理响应
-        if "Responses" in response and table_name in response["Responses"]:
-            items = response["Responses"][table_name]
-
-            # 处理每个返回的项
-            for item in items:
-                text_id = int(item["text_id"]["N"])
-                vector_binary = item["vector"]["B"]
-                vector = np.frombuffer(vector_binary, dtype=dtype)
-
-                # 存储向量，以text_id为键
-                id_to_vector[text_id] = vector
-
-        # 处理未处理的键
-        unprocessed_keys = (
-            response.get("UnprocessedKeys", {}).get(table_name, {}).get("Keys", [])
-        )
-        retry_attempts = 0
-        max_retries = 10
-
-        # 重试获取未处理的键
-        while unprocessed_keys and retry_attempts < max_retries:
-            time.sleep(0.5)
-
-            retry_attempts += 1
-            print(f"重试未处理的键，第{retry_attempts}次尝试...")
-
-            # 只请求未处理的键
-            retry_response = dynamodb_client.batch_get_item(
+            response = dynamodb_client.batch_get_item(
                 RequestItems={
-                    table_name: {"Keys": unprocessed_keys, "ConsistentRead": True}
+                    table_name: {
+                        "Keys": keys_list,
+                        "ConsistentRead": True,
+                    }
                 }
             )
 
-            if (
-                "Responses" in retry_response
-                and table_name in retry_response["Responses"]
-            ):
-                retry_items = retry_response["Responses"][table_name]
-
-                for item in retry_items:
+            if "Responses" in response and table_name in response["Responses"]:
+                items = response["Responses"][table_name]
+                for item in items:
                     text_id = int(item["text_id"]["N"])
                     vector_binary = item["vector"]["B"]
                     vector = np.frombuffer(vector_binary, dtype=dtype)
-
-                    # 存储向量
                     id_to_vector[text_id] = vector
 
-            unprocessed_keys = (
-                retry_response.get("UnprocessedKeys", {})
-                .get(table_name, {})
-                .get("Keys", [])
+        # 按照当前已获取结果填充一次，用于判断是否还存在 None
+        for idx, text_id in enumerate(text_id_list):
+            if text_id in id_to_vector:
+                result_vectors[idx] = id_to_vector[text_id]
+
+        # 计算仍缺失的唯一ID
+        missing_set = set(unique_text_ids) - set(id_to_vector.keys())
+        remaining_ids = list(missing_set)
+
+        if remaining_ids:
+            retry_attempts += 1
+            print(
+                f"重试未获取的向量，第{retry_attempts}次尝试，还剩{len(remaining_ids)}个..."
             )
+            time.sleep(0.5)
 
-        if unprocessed_keys:
-            raise Exception(f"警告：有{len(unprocessed_keys)}个键未能成功读取")
+    if remaining_ids:
+        raise Exception(f"警告：有{len(remaining_ids)}个向量未能成功读取")
 
-    # 将结果按照原始text_id_list的顺序填充到result_vectors
+    # 确保返回顺序与输入一致
     for idx, text_id in enumerate(text_id_list):
         if text_id in id_to_vector:
             result_vectors[idx] = id_to_vector[text_id]

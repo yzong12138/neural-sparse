@@ -2,6 +2,9 @@ import os
 import threading
 import numpy as np
 import logging
+import time
+import random
+from botocore.exceptions import ClientError
 
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
@@ -31,23 +34,64 @@ class EmbeddingService:
         self, table_name: str, model_id: int, ids: List[int]
     ):
         """Background task to fetch embeddings from DynamoDB"""
-        try:
-            embeddings = batch_get_vectors(
-                table_name, ids, model_id=model_id, region_name=self.region_name
+        key = f"{table_name}_{model_id}_{','.join(map(str, ids))}"
+
+        def _is_retriable_error(exc: Exception) -> bool:
+            message = str(exc).lower()
+            codes = {
+                "provisionedthroughputexceededexception",
+                "throttling",
+                "throttlingexception",
+                "requestlimitexceeded",
+                "limitexceededexception",
+                "serviceunavailable",
+                "internalservererror",
+            }
+            if isinstance(exc, ClientError):
+                code = (
+                    exc.response.get("Error", {}).get("Code", "").strip().lower()
+                )
+                if code in codes:
+                    return True
+            # Fallback by message patterns
+            return (
+                "throughput" in message
+                or "throttle" in message
+                or "limit" in message
+                or "service unavailable" in message
             )
-            # Store results and set event flag
-            with self.lock:
-                key = f"{table_name}_{model_id}_{','.join(map(str, ids))}"
-                self.fetched_embeddings[key] = embeddings
-                if key in self.task_events:  # Ensure task still exists
-                    self.task_events[key].set()
-        except Exception as e:
-            # Log error and set event to avoid deadlocks
-            with self.lock:
-                key = f"{table_name}_{model_id}_{','.join(map(str, ids))}"
-                self.fetched_embeddings[key] = {"error": str(e)}
-                if key in self.task_events:
-                    self.task_events[key].set()
+
+        max_retries = 8
+        base_delay_seconds = 0.5
+
+        for attempt in range(max_retries + 1):
+            try:
+                embeddings = batch_get_vectors(
+                    table_name, ids, model_id=model_id, region_name=self.region_name
+                )
+                with self.lock:
+                    self.fetched_embeddings[key] = embeddings
+                    if key in self.task_events:
+                        self.task_events[key].set()
+                return
+            except Exception as e:
+                if attempt < max_retries and _is_retriable_error(e):
+                    delay = base_delay_seconds * (2 ** attempt) * (1.0 + random.random() * 0.25)
+                    logger.warning(
+                        "Fetch throttled/limited. retry %s/%s in %.2fs: %s",
+                        attempt + 1,
+                        max_retries,
+                        delay,
+                        e,
+                    )
+                    time.sleep(delay)
+                    continue
+                # Non-retriable or max attempts reached: record error and signal
+                with self.lock:
+                    self.fetched_embeddings[key] = {"error": str(e)}
+                    if key in self.task_events:
+                        self.task_events[key].set()
+                return
 
     def register_task(
         self, table_name: str, model_id: int, ids: List[int]
