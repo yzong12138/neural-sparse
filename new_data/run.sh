@@ -4,7 +4,11 @@ set -e
 
 
 python scorer_runner.py \
-    --dataset_path ../data/ \
-    --all_datasets "msmarco_ft3" \
-    --identifier bge_lw_reranker \
+    --all_datasets "msmarco_st" \
+    --identifier minilm-l6 \
+    --num_processes 8
+
+python scorer_runner.py \
+    --all_datasets "msmarco_st" \
+    --identifier t5 \
     --num_processes 8

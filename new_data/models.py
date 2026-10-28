@@ -323,6 +323,10 @@ GET_SCORER = {
         model_id="cross-encoder/ms-marco-MiniLM-L12-v2",
         device=device,
     ),
+    "minilm-l6": lambda device: MinilmScorer(
+        model_id="cross-encoder/ms-marco-MiniLM-L6-v2",
+        device=device,
+    ),
     "t5": lambda device: T5Scorer(
         model_id="castorini/monot5-3b-msmarco-10k",
         device=device,
